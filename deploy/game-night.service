@@ -1,0 +1,18 @@
+# systemd user service for Game Night.
+# Install: cp deploy/game-night.service ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now game-night
+[Unit]
+Description=Game Night
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/game-night
+Environment=NODE_ENV=production
+# systemd doesn't load your shell profile. If node lives somewhere else (nvm, fnm), put its folder first.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/game-night/node_modules/.bin/tsx src/server/index.ts
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

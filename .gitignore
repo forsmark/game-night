@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+.env
+*.db
+*.db-shm
+*.db-wal
+.claude/
+.DS_Store
+collection.csv
