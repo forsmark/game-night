@@ -8,3 +8,4 @@ data/
 .claude/
 .DS_Store
 collection.csv
+dist-server/

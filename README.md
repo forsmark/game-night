@@ -15,7 +15,7 @@ A small web app for a monthly board game night. Friends join from one group link
 
 ## Stack
 
-Node 22 or later, Hono, SQLite (better-sqlite3 and Drizzle), React, TanStack Router and Query, Tailwind CSS, shadcn/ui, Framer Motion.
+Node 22 or later (or Podman), Hono, SQLite (better-sqlite3 and Drizzle), React, TanStack Router and Query, Tailwind CSS, shadcn/ui, Framer Motion.
 
 ## Run it locally
 
@@ -44,41 +44,49 @@ With a token in `BGG_TOKEN`, players can search BGG, and **Import collection > B
 
 ## Deploy on the home server
 
-1. Copy the project to `~/game-night` on the server and install:
+The app runs as a Podman container, started by systemd through a Quadlet file. The database lives in a named volume.
+
+1. Get the code and build the image on the server:
    ```bash
+   git clone https://github.com/forsmark/game-night.git ~/game-night
    cd ~/game-night
-   pnpm install --frozen-lockfile
-   pnpm build
+   podman build -t game-night .
    ```
 2. Pick the public address. Check what Funnel already serves first:
    ```bash
    tailscale funnel status
    ```
    If port 443 is free, use `https://<machine>.<tailnet>.ts.net`. If another app already has it, use port 8443: `https://<machine>.<tailnet>.ts.net:8443`.
-3. Create `.env`:
+3. Create `~/game-night/.env`. The container reads it:
    ```bash
-   DATABASE_PATH=./data/game-night.db
-   PORT=3002
    BASE_URL=https://<machine>.<tailnet>.ts.net:8443
    BGG_TOKEN=
    ```
    `BASE_URL` must be the public address, because the group link and the personal links use it.
-4. Create the host and keep the printed link:
+4. Start the container:
    ```bash
-   pnpm host:link "Marc"
-   ```
-5. Start the service. Check `which node` first and fix the `PATH` line in the service file if node is elsewhere.
-   ```bash
-   cp deploy/game-night.service ~/.config/systemd/user/
+   mkdir -p ~/.config/containers/systemd
+   cp deploy/game-night.container ~/.config/containers/systemd/
    systemctl --user daemon-reload
-   systemctl --user enable --now game-night
+   systemctl --user start game-night
+   ```
+   Quadlet makes the service start at boot. There is no `enable` step.
+5. Create the host and keep the printed link:
+   ```bash
+   podman exec game-night node dist-server/seed/host-link.js "Marc"
    ```
 6. Expose it. Use `--https=443` instead if that port is free:
    ```bash
    tailscale funnel --bg --https=8443 3002
    ```
 
-The data lives in `data/game-night.db`. Back up that file. To update, pull the new code, then run `pnpm install --frozen-lockfile && pnpm build && systemctl --user restart game-night`. Migrations run at start.
+To update: `git pull && podman build -t game-night . && systemctl --user restart game-night`. Migrations run when the container starts.
+
+To back up the database: `podman volume export game-night-data > game-night-backup.tar`.
+
+### Without a container
+
+`deploy/game-night.service` runs the app directly with Node 22 or later. Install with `pnpm install --frozen-lockfile && pnpm build`, create `.env` as above, run `pnpm host:link "Marc"`, then copy the service file to `~/.config/systemd/user/` and run `systemctl --user enable --now game-night`. Check `which node` and fix the service's `PATH` line if node lives elsewhere.
 
 ## Tests
 

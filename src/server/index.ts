@@ -12,7 +12,9 @@ const { port, bggToken } = getEnv();
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Game Night server listening on port ${info.port}`);
   if (!db.select().from(members).where(eq(members.role, "host")).get()) {
-    console.log("No host yet. Run `pnpm host:link <your name>` to get your link.");
+    console.log(
+      "No host yet. Run `pnpm host:link <your name>`, or in the container `node dist-server/seed/host-link.js <your name>`.",
+    );
   }
-  if (!bggToken) console.log("BGG_TOKEN is not set. Game search and shelf import are off.");
+  if (!bggToken) console.log("BGG_TOKEN is not set. BoardGameGeek search and username import are off. Known games and the CSV import still work.");
 });

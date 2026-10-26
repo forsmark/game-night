@@ -1,0 +1,24 @@
+# Podman Quadlet: runs Game Night as a systemd user service.
+# Install: cp deploy/game-night.container ~/.config/containers/systemd/
+#          systemctl --user daemon-reload && systemctl --user start game-night
+# Quadlet generates the service, so there is no "enable": [Install] below starts it at boot.
+[Unit]
+Description=Game Night
+After=network-online.target
+
+[Container]
+ContainerName=game-night
+Image=localhost/game-night:latest
+# Only reachable from this machine. Tailscale Funnel forwards to it.
+PublishPort=127.0.0.1:3002:3002
+Volume=game-night-data:/app/data
+# BASE_URL and BGG_TOKEN. See .env.example.
+EnvironmentFile=%h/game-night/.env
+HealthCmd=node -e "fetch('http://127.0.0.1:3002/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HealthInterval=30s
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

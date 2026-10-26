@@ -13,12 +13,13 @@ pnpm dev            # API on :3002, Vite on :5173 (Vite proxies /api and /j)
 pnpm test           # vitest. Run it after every change
 pnpm typecheck      # tsc (TypeScript 7)
 pnpm build          # frontend into dist/
+pnpm build:server   # server bundled to plain JS in dist-server/, as the container runs it
 pnpm db:generate    # new migration after a schema change
 pnpm host:link Name # create the host on an empty database, or print the host's link
 pnpm seed:demo      # fake players and a planned night, empty database only
 ```
 
-A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. For UI changes, also open the page and look at it, in light and dark mode and at phone width (390px).
+A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. If you change dependencies, the build, or the server entry points, also build the container: `podman build -t game-night .`. For UI changes, also open the page and look at it, in light and dark mode and at phone width (390px).
 
 ### Layout
 
@@ -39,6 +40,7 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. F
 
 ### Rules
 
+- **Dependencies:** `dependencies` holds only what the server imports at runtime (hono, @hono/node-server, better-sqlite3, drizzle-orm, zod, fast-xml-parser). Frontend packages are bundled by Vite and belong in `devDependencies`, or they end up in the container image.
 - **Package manager:** use pnpm, never npm. `.npmrc` and `pnpm-workspace.yaml` require packages to be at least 7 days old. Don't lower that limit to install something newer.
 - **Migrations:** never edit a migration that exists. Change `schema.ts`, then run `pnpm db:generate`. The server applies migrations when it starts.
 - **Tests:** a test must say why the behaviour matters, and fail when that behaviour breaks. Keep logic pure where you can (planner, physics, parsers) and test it directly.
@@ -53,6 +55,8 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. F
 
 The app runs at the address in `BASE_URL`, for example `https://olympus.<tailnet>.ts.net:8443`. Everything is JSON over `/api`.
 
+On the home server it runs as the Podman container `game-night`, managed by systemd (`systemctl --user status game-night`). Logs: `journalctl --user -u game-night`. The database is in the volume `game-night-data`. Run one-off scripts inside the container, for example `podman exec game-night node dist-server/seed/host-link.js`.
+
 ### Signing in
 
 The app has no passwords and no API keys. Every person has a personal link, `BASE_URL/j/<token>`. Opening it sets a `session_id` cookie that lasts 180 days. An agent signs in the same way and keeps the cookie:
@@ -62,7 +66,7 @@ curl -s -c jar.txt -o /dev/null "$BASE_URL/j/<token>"   # sign in
 curl -s -b jar.txt "$BASE_URL/api/auth/me"              # {"id","name","role","color"}
 ```
 
-To act as the host, use the host's personal link. Run `pnpm host:link` on the server to print it. To act as a guest, use that guest's link. The host can copy it on the Host page.
+To act as the host, use the host's personal link. Run `podman exec game-night node dist-server/seed/host-link.js` on the server to print it. To act as a guest, use that guest's link. The host can copy it on the Host page.
 
 ### Secrets and permissions
 
