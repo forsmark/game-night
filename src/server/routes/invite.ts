@@ -9,9 +9,7 @@ import { freshCode, GROUP_CODE_KEY } from "../auth/sign-in-codes";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { startSession } from "./auth";
 import { nextFreeColor } from "./members";
-import { nextEvent } from "./events";
-
-const DEFAULT_LIMIT = 15;
+import { nextEvent, nightLimit, placesTaken } from "./events";
 
 function getSetting(db: AppDb, key: string) {
   return db.select().from(settings).where(eq(settings.key, key)).get()?.value;
@@ -34,9 +32,11 @@ export function getInvite(db: AppDb) {
     code = freshCode(db);
     setSetting(db, GROUP_CODE_KEY, code);
   }
-  const limit = Number(getSetting(db, "invite_limit") ?? DEFAULT_LIMIT);
-  const used = db.select({ n: sql<number>`count(*)` }).from(members).get()!.n;
-  return { token, code, limit, used, link: shareLink("i", token) };
+  // The limit is per night: `used` is the places taken on the next night, 0 when none is planned.
+  const night = nextEvent(db) ?? null;
+  const limit = nightLimit(db);
+  const used = night ? placesTaken(db, night.id) : 0;
+  return { token, code, limit, used, night, link: shareLink("i", token) };
 }
 
 const joinBody = z.object({
@@ -46,7 +46,7 @@ const joinBody = z.object({
 const limitBody = z.object({ limit: z.number().int().min(2).max(50) });
 
 const invalid = { error: { code: "INVALID_INVITE", message: "This invite link no longer works. Ask the host for the new one." } };
-const full = { error: { code: "GROUP_FULL", message: "The group is full. Ask the host to make room." } };
+const full = { error: { code: "NIGHT_FULL", message: "Every place for the next night is taken. Ask the host to make room." } };
 
 // Public routes for people who open the group link.
 export function joinInviteRoutes(db: AppDb) {
@@ -55,9 +55,10 @@ export function joinInviteRoutes(db: AppDb) {
   app.get("/:token", (c) => {
     const invite = getInvite(db);
     if (c.req.param("token") !== invite.token) return c.json(invalid, 404);
-    const night = nextEvent(db);
+    const { night } = invite;
     return c.json({
-      full: invite.used >= invite.limit,
+      // Only a planned night can be full. Without one, people can always join the group.
+      full: night !== null && invite.used >= invite.limit,
       night: night ? { startsAt: night.startsAt, location: night.location } : null,
     });
   });
@@ -69,9 +70,12 @@ export function joinInviteRoutes(db: AppDb) {
     // No await from here on, so two people joining at once can't both take the last place.
     const invite = getInvite(db);
     if (c.req.param("token") !== invite.token) return c.json(invalid, 404);
-    if (invite.used >= invite.limit) return c.json(full, 403);
-
     const { name, status } = parsed.data;
+    const { night } = invite;
+    // Joining is open to anyone with the link. Only taking a place on a full night is refused.
+    const takesPlace = night && (status === "yes" || status === "maybe");
+    if (takesPlace && invite.used >= invite.limit) return c.json(full, 403);
+
     const taken = db
       .select({ name: members.name })
       .from(members)
@@ -100,7 +104,6 @@ export function joinInviteRoutes(db: AppDb) {
     };
     db.insert(members).values(member).run();
 
-    const night = nextEvent(db);
     if (night && status) db.insert(rsvps).values({ eventId: night.id, memberId: member.id, status, updatedAt: now }).run();
 
     startSession(c, db, member.id);
@@ -116,8 +119,8 @@ export function inviteRoutes(db: AppDb) {
   app.use("*", sessionMiddleware(db), requireHost);
 
   const view = () => {
-    const { link, code, limit, used } = getInvite(db);
-    return { link, code, limit, used };
+    const { link, code, limit, used, night } = getInvite(db);
+    return { link, code, limit, used, night: night ? { startsAt: night.startsAt } : null };
   };
 
   app.get("/", (c) => c.json(view()));

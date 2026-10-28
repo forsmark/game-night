@@ -79,18 +79,17 @@ function WhoList({ label, people }: { label: string; people: EventMember[] }) {
   );
 }
 
+// A night lists only the people who answered it. The rest of the group isn't on this night.
 function Who({ detail }: { detail: EventDetail }) {
   const byId = new Map(detail.members.map((m) => [m.id, m]));
   const group = (status: RsvpStatus) =>
     detail.rsvps.filter((r) => r.status === status).map((r) => byId.get(r.memberId)!).filter(Boolean);
-  const answered = new Set(detail.rsvps.map((r) => r.memberId));
 
   return (
     <div className="flex flex-col gap-2">
       <WhoList label="Coming" people={group("yes")} />
       <WhoList label="Maybe" people={group("maybe")} />
-      <WhoList label="Can't" people={group("no")} />
-      <WhoList label="No answer" people={detail.members.filter((m) => !answered.has(m.id))} />
+      <WhoList label="Not coming" people={group("no")} />
     </div>
   );
 }
@@ -148,9 +147,13 @@ export function NightView({ eventId }: { eventId: string }) {
             <h2 id="vote-heading" className="font-display text-3xl">
               What should we play?
             </h2>
-            <p className="text-sm text-muted-foreground">Mark every game you'd play. The tables follow the votes.</p>
+            <p className="text-sm text-muted-foreground">
+              {myRsvp
+                ? "Mark every game you'd play. The tables follow the votes."
+                : "Say whether you're coming above. Then you can suggest games and vote."}
+            </p>
           </div>
-          <SuggestGameDialog eventId={eventId} nominated={nominated} />
+          {myRsvp && <SuggestGameDialog eventId={eventId} nominated={nominated} />}
         </div>
         {detail.nominations.length === 0 ? (
           <p className="paper-hole p-8 text-center text-sm text-muted-foreground">
@@ -166,6 +169,7 @@ export function NightView({ eventId }: { eventId: string }) {
                   members={members}
                   attending={attending}
                   myId={member.id}
+                  canVote={Boolean(myRsvp)}
                   canRemove={member.role === "host" || nomination.nominatedBy === member.id}
                   onVote={(approve) => vote.mutate({ bggId: nomination.game.bggId, approve })}
                   onRemove={() => removeNomination.mutate(nomination.game.bggId)}

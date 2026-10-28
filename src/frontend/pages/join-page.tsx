@@ -45,8 +45,8 @@ export default function JoinPage() {
   if (info.data.full) {
     return (
       <Shell>
-        <h1 className="font-display text-4xl">The group is full</h1>
-        <p className="text-muted-foreground">Every place is taken. Ask the host to make room.</p>
+        <h1 className="font-display text-4xl">The next night is full</h1>
+        <p className="text-muted-foreground">Every place for the next night is taken. Ask the host to make room.</p>
       </Shell>
     );
   }

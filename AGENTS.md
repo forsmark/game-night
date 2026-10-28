@@ -74,10 +74,10 @@ To act as the host, use the host's personal link. Run `podman exec game-night no
 ### Secrets and permissions
 
 - **Personal links** are passwords. Never post, log or send them anywhere except to their owner.
-- **The group link** (`/i/<token>`) is meant for the group chat. Anyone with it can join until the group is full. The group code is the same thing in typeable form.
+- **The group link** (`/i/<token>`) is meant for the group chat. Anyone with it can join the group. Joining with yes or maybe is refused once the next night is full. The group code is the same thing in typeable form.
 - **Sign-in codes** are passwords for 10 minutes. Send them only in a POST body, never in a URL, and never log them. Wrong guesses lock the code box for everyone for a while, so don't try codes in a loop.
 - **Acting for a person:** don't answer, vote or suggest on behalf of someone unless that person asked you to.
-- **Ask the host first** before any of these: deleting a night, removing a player, making a new link (it signs the player out everywhere), replacing the shelf with an import, or changing the group limit.
+- **Ask the host first** before any of these: deleting a night, removing a player, making a new link (it signs the player out everywhere), replacing the shelf with an import, or changing the per-night limit.
 
 ### Endpoints
 
@@ -89,14 +89,14 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 |-----------------|-----|--------------|
 | `GET /api/events/next` | all | `{"id"}` of the next night, or `{"id": null}` |
 | `GET /api/events` | all | All nights, newest first, with a `going` count |
-| `GET /api/events/:id?maybes=1` | all | Full detail: the night, members, answers, suggested games with voters, and the table `plan`. `maybes=1` counts "maybe" as coming |
+| `GET /api/events/:id?maybes=1` | all | Full detail: the night, its `members`, answers, suggested games with voters, and the table `plan`. `members` holds only the night's players, the people who answered it (yes, maybe or no). `maybes=1` counts "maybe" as coming |
 | `POST /api/events` | host | Plan a night: `{"startsAt": "2026-11-13T18:30", "location", "note", "splitAt": 7}` |
 | `PATCH /api/events/:id` | host | Change any of those fields |
 | `DELETE /api/events/:id` | host | Delete a night |
-| `PUT /api/events/:id/rsvp` | all | `{"status": "yes" \| "maybe" \| "no"}` for the signed-in person |
-| `POST /api/events/:id/nominations` | all | Suggest a game: `{"bggId", "bringing": true \| false}`. `bringing: false` only works for shelf games. Expansions are refused |
+| `PUT /api/events/:id/rsvp` | all | `{"status": "yes" \| "maybe" \| "no"}` for the signed-in person. A new yes or maybe on a night whose yes and maybe answers have reached the limit gets 403 `NIGHT_FULL`. Answering no, switching between yes and maybe, and the host are never refused |
+| `POST /api/events/:id/nominations` | all | Suggest a game: `{"bggId", "bringing": true \| false}`. `bringing: false` only works for shelf games. Expansions are refused. Only after answering this night, otherwise 403 `ANSWER_FIRST` |
 | `DELETE /api/events/:id/nominations/:bggId` | suggester or host | Take a game off the vote |
-| `PUT /api/events/:id/votes/:bggId` | all | `{"approve": true \| false}` |
+| `PUT /api/events/:id/votes/:bggId` | all | `{"approve": true \| false}`. Only after answering this night, otherwise 403 `ANSWER_FIRST` |
 
 **Games and the shelf**
 
@@ -119,10 +119,12 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 | `GET /api/auth/link` | all | The signed-in person's own personal link |
 | `POST /api/auth/code` | all | `{"code", "expiresAt"}`: a one-time sign-in code for yourself, valid 10 minutes. Replaces your previous unused code |
 | `POST /api/code` | anyone | `{"code"}`, the code box on the welcome page. The group code returns `{"kind": "group", "token"}` (open `/i/<token>` to join). A sign-in code sets the session and returns `{"kind": "signin", "member"}`. Unknown or spent: 404. After 10 wrong codes in a minute or 100 in a day, for everyone together: 429 |
-| `GET /api/invite` | host | `{"link", "code", "limit", "used"}` for the group link and group code |
-| `PATCH /api/invite` | host | `{"limit"}`, from 2 to 50 |
+| `GET /api/join/:token` | anyone | `{"full", "night"}` for the join page. `full` is true when the next night's yes and maybe answers have reached the limit, never when no night is planned |
+| `POST /api/join/:token` | anyone | `{"name", "status"}`: join the group and answer the next night. A yes or maybe on a full night gets 403 `NIGHT_FULL` and nobody is added |
+| `GET /api/invite` | host | `{"link", "code", "limit", "used", "night"}` for the group link and group code. `limit` is per night. `used` is the yes and maybe answers on the next night, `night` that night's `{"startsAt"}` or `null` |
+| `PATCH /api/invite` | host | `{"limit"}`, from 2 to 50: the most people who can say yes or maybe to one night. The host counts, but is never refused |
 | `POST /api/invite/new-link` | host | New group link and group code. The old ones stop working |
-| `GET /api/members` | host | Everyone, with their personal links |
+| `GET /api/members` | host | Everyone in the group, on a night or not, with their personal links |
 | `POST /api/members` | host | Add a player by hand: `{"name"}` |
 | `PATCH /api/members/:id` | host | `{"name", "color"}` |
 | `POST /api/members/:id/code` | host | A one-time sign-in code for that player |
@@ -135,6 +137,6 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 
 ### Common tasks
 
-- **Remind people to answer:** read the next night. Members with no entry in `rsvps` haven't answered. Post the group link in the chat, never personal links.
+- **Remind people to answer:** read the next night and, as host, `GET /api/members`. Members of the group with no entry in the night's `rsvps` haven't answered (the night's own `members` lists only people who did). Post the group link in the chat, never personal links.
 - **Summarise the night:** report who is coming, the top-voted games, and `plan.recommended` with its first option.
 - **Plan next month:** create the night as host with the same place and time as the last one, then share the group link.

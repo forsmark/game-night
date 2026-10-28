@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, runMigrations } from "../src/server/db/client";
-import { members, rsvps, sessions, settings, signInCodes } from "../src/server/db/schema";
+import { events, members, rsvps, sessions, settings, signInCodes } from "../src/server/db/schema";
 import { createApp } from "../src/server/app";
 import { createSession } from "../src/server/auth/sessions";
 import { CODE_ALPHABET, generateCode, GuessLimiter, hashCode, normaliseCode } from "../src/server/auth/codes";
@@ -48,7 +48,7 @@ function wrongCode() {
 }
 
 beforeEach(() => {
-  for (const table of [signInCodes, rsvps, sessions, members, settings]) db.delete(table).run();
+  for (const table of [signInCodes, rsvps, sessions, events, members, settings]) db.delete(table).run();
   // A new app per test gives a fresh wrong-guess counter.
   app = createApp(db);
   host = addMember("Host", "host");
@@ -118,12 +118,15 @@ describe("group code", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  it("still leads to a full group, where the join form refuses new players", async () => {
-    // The code must not be a way around the group limit.
+  it("still leads to a full night, where the join form refuses another yes", async () => {
+    // The code must not be a way around the per-night limit.
+    const eventId = randomUUID();
+    db.insert(events).values({ id: eventId, startsAt: "2999-01-01T18:30", createdAt: "" }).run();
+    for (const id of [host.id, guest.id]) db.insert(rsvps).values({ eventId, memberId: id, status: "yes", updatedAt: "" }).run();
     db.insert(settings).values({ key: "invite_limit", value: "2" }).run();
     const { token } = (await (await enter(getInvite(db).code)).json()) as { token: string };
     expect((await (await app.request(`/api/join/${token}`)).json()).full).toBe(true);
-    const res = await post(`/api/join/${token}`, { name: "Bo" });
+    const res = await post(`/api/join/${token}`, { name: "Bo", status: "yes" });
     expect(res.status).toBe(403);
   });
 

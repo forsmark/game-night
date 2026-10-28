@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api-client";
 import type { MeepleColor } from "../../../shared/meeples";
 import type { Game } from "./games";
@@ -23,6 +23,12 @@ export type EventInput = Omit<GameNight, "id">;
 
 const eventKey = (id: string) => ["events", id];
 
+// The host's "places taken" count follows the next night's answers, so it refreshes with the nights.
+function invalidateNights(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["events"] });
+  queryClient.invalidateQueries({ queryKey: ["invite"] });
+}
+
 export function useNextEventId() {
   return useQuery({ queryKey: ["events", "next"], queryFn: () => apiClient.get<{ id: string | null }>("/events/next") });
 }
@@ -46,7 +52,7 @@ function useEventMutation<T>(id: string, mutationFn: (input: T) => Promise<unkno
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: () => invalidateNights(queryClient),
     onSettled: () => queryClient.invalidateQueries({ queryKey: eventKey(id) }),
   });
 }
@@ -92,7 +98,7 @@ export function useCreateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: EventInput) => apiClient.post<{ id: string }>("/events", input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: () => invalidateNights(queryClient),
   });
 }
 
@@ -100,7 +106,7 @@ export function useUpdateEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: Partial<EventInput> & { id: string }) => apiClient.patch(`/events/${id}`, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: () => invalidateNights(queryClient),
   });
 }
 
@@ -108,6 +114,6 @@ export function useDeleteEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/events/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: () => invalidateNights(queryClient),
   });
 }

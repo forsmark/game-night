@@ -4,7 +4,8 @@ import type { CurrentMember } from "../auth-context";
 import type { RsvpStatus } from "./events";
 
 export type InviteInfo = { full: boolean; night: { startsAt: string; location: string } | null };
-export type InviteSettings = { link: string; code: string; limit: number; used: number };
+// `limit` is per night. `used` is the yes and maybe answers on the next night, `night` that night or null.
+export type InviteSettings = { link: string; code: string; limit: number; used: number; night: { startsAt: string } | null };
 
 export function useInviteInfo(token: string) {
   return useQuery({

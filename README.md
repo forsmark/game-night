@@ -4,7 +4,8 @@ A small web app for a monthly board game night. Friends join from one group link
 
 ## What it does
 
-- **Group link.** Share one link in the group chat. New players enter their name and answer for the next night. The link stops accepting new players at the group limit (default 15). The host can change the limit or make a new link.
+- **Group link.** Share one link in the group chat. New players enter their name and answer for the next night. The host can make a new link.
+- **Players per night.** A night lists only the people who answered it: coming, maybe or not coming. Everyone keeps one name, colour and link across nights. Each night takes at most the limit (default 15) of yes and maybe answers, which the host can change. After that the join form and the answer buttons refuse new places. The host is never refused. Only people who answered a night can suggest games and vote on it.
 - **Personal links.** Every player also has a personal link that signs them in on another device. They copy it from the menu under their meeple. Nobody has a password.
 - **Codes.** Links don't open inside an iPhone home-screen app, so the welcome page has a code box. The group code (on the Host page, next to the group link) leads to the join form. "Sign in on another device" in the menu shows a one-time code that works once, for 10 minutes. The host can make one for any player.
 - **Vote.** Each player marks every suggested game they would play (approval voting).
@@ -109,6 +110,6 @@ Nothing sits in front of the app there, so the app itself sends `Referrer-Policy
 ## Tests
 
 ```bash
-pnpm test        # planner, BGG and CSV parsing, group link, codes, shelf import, hand-typed games, piece physics
+pnpm test        # planner, BGG and CSV parsing, group link, players per night, codes, shelf import, hand-typed games, piece physics
 pnpm typecheck
 ```

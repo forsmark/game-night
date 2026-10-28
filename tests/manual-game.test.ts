@@ -40,8 +40,8 @@ describe("games typed in by hand", () => {
     expect(created.status).toBe(201);
     expect(bggId).toBeLessThan(0);
 
-    expect((await call("guest", "POST", `/api/events/${eventId}/nominations`, { bggId, bringing: true })).status).toBe(201);
     for (const who of ["host", "guest"] as const) await call(who, "PUT", `/api/events/${eventId}/rsvp`, { status: "yes" });
+    expect((await call("guest", "POST", `/api/events/${eventId}/nominations`, { bggId, bringing: true })).status).toBe(201);
     const detail = (await (await call("host", "GET", `/api/events/${eventId}`)).json()) as any;
     expect(detail.plan.oneTable[0].tables[0]).toMatchObject({ bggId, happy: 1 });
   });

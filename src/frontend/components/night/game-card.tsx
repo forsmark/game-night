@@ -14,6 +14,7 @@ export function GameCard({
   members,
   attending,
   myId,
+  canVote,
   canRemove,
   onVote,
   onRemove,
@@ -22,6 +23,8 @@ export function GameCard({
   members: Map<string, EventMember>;
   attending: number;
   myId: string;
+  // Only the night's players vote, so this is off until the viewer has answered.
+  canVote: boolean;
   canRemove: boolean;
   onVote: (approve: boolean) => void;
   onRemove: () => void;
@@ -129,6 +132,7 @@ export function GameCard({
             variant={voted ? "default" : "outline"}
             aria-pressed={voted}
             onClick={() => onVote(!voted)}
+            disabled={!canVote}
             className={cn("min-w-28 rounded-full", voted && "bg-vote text-vote-foreground hover:bg-vote/85")}
           >
             {voted ? (

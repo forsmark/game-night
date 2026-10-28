@@ -18,11 +18,19 @@ function join(token: string, body: unknown) {
 }
 
 function addMembers(count: number) {
+  const ids: string[] = [];
   for (let i = 0; i < count; i++) {
+    const id = randomUUID();
     db.insert(members)
-      .values({ id: randomUUID(), name: `Player ${i}`, role: "guest", color: "red", linkToken: randomUUID(), createdAt: "" })
+      .values({ id, name: `Player ${i}`, role: "guest", color: "red", linkToken: randomUUID(), createdAt: "" })
       .run();
+    ids.push(id);
   }
+  return ids;
+}
+
+function answer(eventId: string, memberId: string, status: "yes" | "maybe" | "no") {
+  db.insert(rsvps).values({ eventId, memberId, status, updatedAt: "" }).run();
 }
 
 beforeEach(() => {
@@ -42,16 +50,53 @@ describe("group invite link", () => {
     expect(rsvp).toMatchObject({ eventId, status: "yes" });
   });
 
-  it("stops new players once the group reaches the limit", async () => {
-    // Without a limit, anyone the link is forwarded to could join and vote.
+  it("refuses a yes once the next night is full, without adding the person to the group", async () => {
+    // Without a limit, anyone the link is forwarded to could take a seat at the host's table.
+    const eventId = randomUUID();
+    db.insert(events).values({ id: eventId, startsAt: "2999-01-01T18:30", createdAt: "" }).run();
     const { token, limit } = getInvite(db);
-    addMembers(limit - 1);
+    for (const id of addMembers(limit - 1)) answer(eventId, id, "yes");
 
-    expect((await join(token, { name: "Last place" })).status).toBe(201);
-    const res = await join(token, { name: "One too many" });
+    expect((await join(token, { name: "Last place", status: "maybe" })).status).toBe(201);
+    expect((await (await app.request(`/api/join/${token}`)).json()).full).toBe(true);
+    const res = await join(token, { name: "One too many", status: "yes" });
 
     expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("NIGHT_FULL");
     expect(db.select().from(members).all()).toHaveLength(limit);
+  });
+
+  it("still lets someone join a full night's group to say they can't come", async () => {
+    // A "no" takes no place, and they keep one identity for the nights after.
+    const eventId = randomUUID();
+    db.insert(events).values({ id: eventId, startsAt: "2999-01-01T18:30", createdAt: "" }).run();
+    db.insert(settings).values({ key: "invite_limit", value: "2" }).run();
+    for (const id of addMembers(2)) answer(eventId, id, "yes");
+
+    expect((await join(getInvite(db).token, { name: "Bo", status: "no" })).status).toBe(201);
+  });
+
+  it("lets people join when no night is planned, however many are in the group", async () => {
+    // The limit is per night. With no night there are no places to run out of.
+    db.insert(settings).values({ key: "invite_limit", value: "2" }).run();
+    addMembers(5);
+    const { token } = getInvite(db);
+
+    expect((await (await app.request(`/api/join/${token}`)).json())).toEqual({ full: false, night: null });
+    expect((await join(token, { name: "Bo", status: "yes" })).status).toBe(201);
+    expect(db.select().from(rsvps).all()).toHaveLength(0);
+  });
+
+  it("counts places on the next night only, so the host sees how full that night is", () => {
+    // Members from earlier nights and members who said no don't take a place.
+    const eventId = randomUUID();
+    db.insert(events).values({ id: eventId, startsAt: "2999-01-01T18:30", createdAt: "" }).run();
+    const [a, b, c] = addMembers(4);
+    answer(eventId, a, "yes");
+    answer(eventId, b, "maybe");
+    answer(eventId, c, "no");
+
+    expect(getInvite(db).used).toBe(2);
   });
 
   it("refuses a name that is already taken, so nobody can join as someone else", async () => {

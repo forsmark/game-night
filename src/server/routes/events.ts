@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDb } from "../db/client";
-import { events, games, members, nominations, rsvps, shelf, votes } from "../db/schema";
+import { events, games, members, nominations, rsvps, settings, shelf, votes } from "../db/schema";
 import { ensureGames } from "../bgg/client";
 import { plan } from "../planner/plan";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
@@ -21,6 +21,51 @@ const voteBody = z.object({ approve: z.boolean() });
 
 const badRequest = (message = "Invalid request body") => ({ error: { code: "BAD_REQUEST", message } });
 const notFound = { error: { code: "NOT_FOUND", message: "No such game night" } };
+const nightFull = {
+  error: {
+    code: "NIGHT_FULL",
+    message: "Every place for this night is taken. Ask the host to make room, or check again later in case someone drops out.",
+  },
+};
+const answerFirst = (what: string) => ({
+  error: { code: "ANSWER_FIRST", message: `Say whether you're coming first. Then you can ${what}.` },
+});
+
+// The most people who can say yes or maybe to one night. Stored as "invite_limit" since it used
+// to cap the whole group.
+export const DEFAULT_LIMIT = 15;
+export function nightLimit(db: AppDb) {
+  const value = db.select().from(settings).where(eq(settings.key, "invite_limit")).get()?.value;
+  return Number(value ?? DEFAULT_LIMIT);
+}
+
+// Places taken on a night: everyone who said yes or maybe. Maybes count, because a maybe can
+// turn into a yes at any time without asking.
+export function placesTaken(db: AppDb, eventId: string) {
+  return db
+    .select({ n: sql<number>`count(*)` })
+    .from(rsvps)
+    .where(and(eq(rsvps.eventId, eventId), inArray(rsvps.status, ["yes", "maybe"])))
+    .get()!.n;
+}
+
+type Status = "yes" | "maybe" | "no";
+
+// Whether an answer may go through on a night with `taken` of `limit` places taken.
+// Saying no never takes a place. Someone who already holds a place keeps it when they switch
+// between yes and maybe. The host is never turned away from their own night, though they
+// still count towards the places.
+export function mayAnswer(input: { role: "host" | "guest"; current: Status | undefined; next: Status; taken: number; limit: number }) {
+  if (input.next === "no" || input.role === "host") return true;
+  if (input.current === "yes" || input.current === "maybe") return true;
+  return input.taken < input.limit;
+}
+
+function hasAnswered(db: AppDb, eventId: string, memberId: string) {
+  return Boolean(
+    db.select().from(rsvps).where(and(eq(rsvps.eventId, eventId), eq(rsvps.memberId, memberId))).get(),
+  );
+}
 
 function today() {
   // sv-SE formats as YYYY-MM-DD, which sorts like the stored startsAt strings.
@@ -36,11 +81,15 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
   const event = db.select().from(events).where(eq(events.id, eventId)).get();
   if (!event) return null;
 
-  const allMembers = db
+  // A night's players are the people who answered it. Everyone else in the group stays out of
+  // the night, so a player from a deleted night doesn't turn up on the next one.
+  const nightMembers = db
     .select({ id: members.id, name: members.name, color: members.color })
     .from(members)
+    .innerJoin(rsvps, and(eq(rsvps.memberId, members.id), eq(rsvps.eventId, eventId)))
     .orderBy(asc(members.createdAt))
     .all();
+  const onNight = new Set(nightMembers.map((m) => m.id));
   const rsvpRows = db
     .select({ memberId: rsvps.memberId, status: rsvps.status, updatedAt: rsvps.updatedAt })
     .from(rsvps)
@@ -58,6 +107,8 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
 
   const approvals = new Map<number, Set<string>>();
   for (const v of voteRows) {
+    // Votes count only from the night's players. Older data may hold votes from people who never answered.
+    if (!onNight.has(v.memberId)) continue;
     if (!approvals.has(v.bggId)) approvals.set(v.bggId, new Set());
     approvals.get(v.bggId)!.add(v.memberId);
   }
@@ -77,7 +128,7 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
 
   return {
     event,
-    members: allMembers,
+    members: nightMembers,
     rsvps: rsvpRows.map(({ memberId, status }) => ({ memberId, status })),
     nominations: nominated,
     includeMaybes,
@@ -148,12 +199,22 @@ export function eventsRoutes(db: AppDb) {
     const eventId = c.req.param("id");
     if (!db.select().from(events).where(eq(events.id, eventId)).get()) return c.json(notFound, 404);
 
-    const row = { eventId, memberId: c.get("member").id, status: parsed.data.status, updatedAt: new Date().toISOString() };
+    // No await from here on, so two people can't both take the last place.
+    const member = c.get("member");
+    const row = { eventId, memberId: member.id, status: parsed.data.status, updatedAt: new Date().toISOString() };
     const existing = db
       .select()
       .from(rsvps)
       .where(and(eq(rsvps.eventId, eventId), eq(rsvps.memberId, row.memberId)))
       .get();
+    const allowed = mayAnswer({
+      role: member.role,
+      current: existing?.status,
+      next: row.status,
+      taken: placesTaken(db, eventId),
+      limit: nightLimit(db),
+    });
+    if (!allowed) return c.json(nightFull, 403);
     // Keep the original timestamp when someone only switches between yes and maybe,
     // so they keep their place in the seating order.
     if (existing && existing.status !== "no" && row.status !== "no") row.updatedAt = existing.updatedAt;
@@ -171,6 +232,8 @@ export function eventsRoutes(db: AppDb) {
     const me = c.get("member").id;
     const { bggId, bringing } = parsed.data;
     if (!db.select().from(events).where(eq(events.id, eventId)).get()) return c.json(notFound, 404);
+    // Only the night's players suggest games, so every suggestion comes from someone on the night.
+    if (!hasAnswered(db, eventId, me)) return c.json(answerFirst("suggest games"), 403);
 
     if (!bringing && !db.select().from(shelf).where(eq(shelf.bggId, bggId)).get()) {
       return c.json(badRequest("That game is not on the shelf. Choose “I'll bring it” instead."), 400);
@@ -233,6 +296,7 @@ export function eventsRoutes(db: AppDb) {
       .where(and(eq(nominations.eventId, eventId), eq(nominations.bggId, bggId)))
       .get();
     if (!nominated) return c.json(badRequest("That game is not on the vote list"), 400);
+    if (!hasAnswered(db, eventId, memberId)) return c.json(answerFirst("vote"), 403);
 
     if (parsed.data.approve) {
       db.insert(votes).values({ eventId, bggId, memberId }).onConflictDoNothing().run();

@@ -213,7 +213,7 @@ function GroupLinkCard() {
   const [limit, setLimitValue] = useState<number | null>(null);
 
   if (!invite.data) return null;
-  const { link, code, used } = invite.data;
+  const { link, code, used, night } = invite.data;
   const shownLimit = limit ?? invite.data.limit;
   const copy = () => navigator.clipboard.writeText(link).then(() => toast.success("Copied the group link"));
   const copyCode = () => navigator.clipboard.writeText(code).then(() => toast.success("Copied the group code"));
@@ -255,18 +255,23 @@ function GroupLinkCard() {
             setLimit.mutate(shownLimit, { onSuccess: () => (setLimitValue(null), toast.success("Limit saved")) });
           }}
         >
-          <span className="font-data">{used}</span>
-          <span className="text-muted-foreground">of</span>
+          {night && (
+            <>
+              <span className="font-data">{used}</span>
+              <span className="text-muted-foreground">of</span>
+            </>
+          )}
+          {!night && <span className="text-muted-foreground">Up to</span>}
           <Input
             type="number"
             min={2}
             max={50}
             value={shownLimit}
             onChange={(e) => setLimitValue(Number(e.target.value))}
-            aria-label="Most players in the group"
+            aria-label="Most players per night"
             className="h-8 w-16 font-data"
           />
-          <span className="text-muted-foreground">places taken</span>
+          <span className="text-muted-foreground">{night ? "places taken on the next night" : "people per night"}</span>
           {limit !== null && limit !== invite.data.limit && (
             <Button type="submit" size="sm" variant="outline" disabled={setLimit.isPending}>
               Save
@@ -286,8 +291,13 @@ function GroupLinkCard() {
           <RefreshCw /> New link and code
         </Button>
       </div>
-      {used >= invite.data.limit && (
-        <p className="text-sm text-destructive">The group is full. Nobody new can join until you raise the limit or remove a player.</p>
+      <p className="text-sm text-muted-foreground">
+        The limit is per night. It counts everyone who says yes or maybe. You can always say yes yourself.
+      </p>
+      {night && used >= invite.data.limit && (
+        <p className="text-sm text-destructive">
+          The next night is full. Nobody else can say yes or maybe until you raise the limit or someone says they can't make it.
+        </p>
       )}
     </section>
   );

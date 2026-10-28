@@ -41,7 +41,7 @@ export function codeRoutes(db: AppDb, limiter = new GuessLimiter()) {
     // Input that can't be a code is a typo, not a guess, so it doesn't count towards the limit.
     if (!code) return c.json(badCode, 400);
 
-    // The group code leads to the normal join form, where the group limit applies as for the link.
+    // The group code leads to the normal join form, where the per-night limit applies as for the link.
     const invite = getInvite(db);
     if (code === invite.code) return c.json({ kind: "group", token: invite.token });
 
