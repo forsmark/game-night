@@ -5,10 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useMakeSignInCode } from "@/lib/queries/codes";
 
-// "ABCDEF" as "ABC DEF": two groups of three are easier to read out and type.
-export function formatCode(code: string) {
-  return `${code.slice(0, 3)} ${code.slice(3)}`;
-}
+import { formatCode } from "@/lib/code-format";
 
 export function BigCode({ code, label }: { code: string; label: string }) {
   return (

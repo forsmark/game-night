@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { InviteButton } from "@/components/invite-button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, MapPin } from "lucide-react";
 import { Meeple } from "@/components/pieces/meeple";
@@ -133,6 +134,7 @@ export function NightView({ eventId }: { eventId: string }) {
             )}
           </div>
           {detail.event.note && <p className="mt-3 max-w-prose whitespace-pre-line text-muted-foreground">{detail.event.note}</p>}
+          {member.role === "host" && <InviteButton night={detail.event} className="mt-4 rounded-full" />}
         </div>
         <RsvpPicker eventId={eventId} current={myRsvp} />
         <Who detail={detail} />

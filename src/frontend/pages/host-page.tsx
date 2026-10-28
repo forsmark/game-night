@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { InviteButton } from "@/components/invite-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatNight } from "@/lib/format";
@@ -223,10 +224,11 @@ function GroupLinkCard() {
       <p className="text-sm text-muted-foreground">
         Share this one link in the group chat. New players enter their name and answer for the next night.
       </p>
+      <InviteButton className="self-start rounded-full" />
       <div className="flex gap-2">
         {/* text-base on phones: iOS zooms in on any input under 16px. */}
         <Input readOnly value={link} aria-label="Group link" className="font-data md:text-xs" onFocus={(e) => e.target.select()} />
-        <Button className="rounded-full" onClick={copy}>
+        <Button variant="outline" className="rounded-full" onClick={copy}>
           <Copy /> Copy
         </Button>
       </div>
