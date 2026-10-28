@@ -113,3 +113,16 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+// One-time sign-in codes, typed on another device. Only the SHA-256 hash is stored, like a password.
+// A row is spent when usedAt is set, and dead after expiresAt. Expired rows are removed when the
+// next code is made or tried.
+export const signInCodes = sqliteTable("sign_in_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  memberId: text("member_id")
+    .notNull()
+    .references(() => members.id, { onDelete: "cascade" }),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+  createdAt: text("created_at").notNull(),
+});

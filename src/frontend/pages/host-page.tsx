@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Copy, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, KeyRound, RefreshCw, Trash2 } from "lucide-react";
 import { Popover } from "radix-ui";
 import { toast } from "sonner";
 import { Meeple } from "@/components/pieces/meeple";
+import { BigCode, SignInCodeDialog } from "@/components/sign-in-code";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,10 @@ async function copyLink(member: Pick<Member, "name" | "link">) {
   toast.success(`Copied ${member.name}'s link`);
 }
 
+// iOS Safari draws date and time fields centred, ignores their width and lets an empty one
+// collapse. Left-align the value and give it a line of height so they line up with the other fields.
+const IOS_DATE = "appearance-none text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-date-and-time-value]:text-left";
+
 const EMPTY_NIGHT: EventInput = { startsAt: "", location: "", note: "", splitAt: 7 };
 
 function NightForm({ editing, onDone }: { editing: (EventInput & { id: string }) | null; onDone: () => void }) {
@@ -84,11 +89,11 @@ function NightForm({ editing, onDone }: { editing: (EventInput & { id: string })
       <h2 className="font-display text-2xl sm:col-span-2">{editing ? "Change the night" : "Plan a night"}</h2>
       <div className="grid gap-2">
         <Label htmlFor="night-date">Date</Label>
-        <Input id="night-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <Input id="night-date" type="date" className={IOS_DATE} value={date} onChange={(e) => setDate(e.target.value)} required />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="night-time">Start time</Label>
-        <Input id="night-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+        <Input id="night-time" type="time" className={IOS_DATE} value={time} onChange={(e) => setTime(e.target.value)} required />
       </div>
       <div className="grid gap-2 sm:col-span-2">
         <Label htmlFor="night-location">Place</Label>
@@ -207,9 +212,10 @@ function GroupLinkCard() {
   const [limit, setLimitValue] = useState<number | null>(null);
 
   if (!invite.data) return null;
-  const { link, used } = invite.data;
+  const { link, code, used } = invite.data;
   const shownLimit = limit ?? invite.data.limit;
   const copy = () => navigator.clipboard.writeText(link).then(() => toast.success("Copied the group link"));
+  const copyCode = () => navigator.clipboard.writeText(code).then(() => toast.success("Copied the group code"));
 
   return (
     <section className="paper flex flex-col gap-3 p-4">
@@ -218,14 +224,30 @@ function GroupLinkCard() {
         Share this one link in the group chat. New players enter their name and answer for the next night.
       </p>
       <div className="flex gap-2">
-        <Input readOnly value={link} aria-label="Group link" className="font-data text-xs" onFocus={(e) => e.target.select()} />
+        {/* text-base on phones: iOS zooms in on any input under 16px. */}
+        <Input readOnly value={link} aria-label="Group link" className="font-data md:text-xs" onFocus={(e) => e.target.select()} />
         <Button className="rounded-full" onClick={copy}>
           <Copy /> Copy
         </Button>
       </div>
+      <div className="grid gap-2">
+        <h3 className="font-semibold">Group code</h3>
+        <p className="text-sm text-muted-foreground">
+          The same as the link, for typing in. Links don't open in the app on an iPhone home screen, so people type this
+          into the code box on the welcome page there.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <BigCode code={code} label="Group code" />
+          </div>
+          <Button variant="outline" className="self-end rounded-full sm:self-auto" onClick={copyCode}>
+            <Copy /> Copy code
+          </Button>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <form
-          className="flex items-center gap-2 text-sm"
+          className="flex flex-wrap items-center gap-2 text-sm"
           onSubmit={(e) => {
             e.preventDefault();
             setLimit.mutate(shownLimit, { onSuccess: () => (setLimitValue(null), toast.success("Limit saved")) });
@@ -252,10 +274,14 @@ function GroupLinkCard() {
         <Button
           variant="ghost"
           size="sm"
-          title="The old link stops working. Players who already joined stay signed in."
-          onClick={() => newLink.mutate(undefined, { onSuccess: () => toast.success("New group link made. The old one no longer works.") })}
+          title="The old link and code stop working. Players who already joined stay signed in."
+          onClick={() =>
+            newLink.mutate(undefined, {
+              onSuccess: () => toast.success("New group link and code made. The old ones no longer work."),
+            })
+          }
         >
-          <RefreshCw /> New link
+          <RefreshCw /> New link and code
         </Button>
       </div>
       {used >= invite.data.limit && (
@@ -272,6 +298,7 @@ function PlayersTab() {
   const newLink = useNewLink();
   const remove = useRemoveMember();
   const [name, setName] = useState("");
+  const [codeFor, setCodeFor] = useState<Member | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -290,7 +317,7 @@ function PlayersTab() {
       >
         <h2 className="font-display text-2xl">Add a player yourself</h2>
         <p className="text-sm text-muted-foreground">For someone who isn't in the group chat. Send them the personal link.</p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Name" required maxLength={40} />
           <Button type="submit" className="rounded-full" disabled={add.isPending}>
             Add and copy link
@@ -313,6 +340,14 @@ function PlayersTab() {
               <Button
                 variant="ghost"
                 size="sm"
+                title="A one-time code that signs them in, for the app on their home screen"
+                onClick={() => setCodeFor(member)}
+              >
+                <KeyRound /> <span className="sr-only sm:not-sr-only">Sign-in code</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 title="Makes the old link stop working and signs them out"
                 onClick={() =>
                   newLink.mutate(member.id, { onSuccess: (updated) => copyLink(updated).catch(() => undefined) })
@@ -325,6 +360,11 @@ function PlayersTab() {
           </li>
         ))}
       </ul>
+      <SignInCodeDialog
+        member={codeFor ?? undefined}
+        open={codeFor !== null}
+        onOpenChange={(open) => !open && setCodeFor(null)}
+      />
     </div>
   );
 }

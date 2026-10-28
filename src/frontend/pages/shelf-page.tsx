@@ -212,7 +212,7 @@ function LooseExpansions({ expansions, bases, isHost }: { expansions: Game[]; ba
                   aria-label={`Base game for ${expansion.name}`}
                   defaultValue=""
                   onChange={(e) => e.target.value && setBase.mutate({ bggId: expansion.bggId, baseId: Number(e.target.value) })}
-                  className="h-9 rounded-[var(--wobble-sm)] border-2 border-input/80 bg-card px-2 text-sm"
+                  className="h-9 rounded-[var(--wobble-sm)] border-2 border-input/80 bg-card px-2 text-base md:text-sm"
                 >
                   <option value="" disabled>
                     Belongs to…

@@ -7,6 +7,7 @@ import { membersRoutes } from "./routes/members";
 import { gamesRoutes, shelfRoutes } from "./routes/games";
 import { eventsRoutes } from "./routes/events";
 import { inviteRoutes, joinInviteRoutes } from "./routes/invite";
+import { codeRoutes } from "./routes/code";
 
 export function createApp(db: AppDb) {
   const app = new Hono();
@@ -32,6 +33,7 @@ export function createApp(db: AppDb) {
   app.route("/api/events", eventsRoutes(db));
   app.route("/api/join", joinInviteRoutes(db));
   app.route("/api/invite", inviteRoutes(db));
+  app.route("/api/code", codeRoutes(db));
 
   if (getEnv().nodeEnv === "production") {
     app.use("/*", serveStatic({ root: "./dist" }));

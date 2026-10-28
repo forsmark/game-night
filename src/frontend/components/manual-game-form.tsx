@@ -114,7 +114,7 @@ export function ManualGameForm({
             id="manual-base"
             value={baseId}
             onChange={(e) => setBaseId(e.target.value)}
-            className="h-10 rounded-[var(--wobble-sm)] border-2 border-input/80 bg-card px-2 text-sm"
+            className="h-10 rounded-[var(--wobble-sm)] border-2 border-input/80 bg-card px-2 text-base md:text-sm"
           >
             <option value="">Nothing. It's a game of its own.</option>
             {bases.map((base) => (

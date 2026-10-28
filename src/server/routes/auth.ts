@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { members } from "../db/schema";
 import { createSession, deleteSession, magicLink } from "../auth/sessions";
+import { createSignInCode } from "../auth/sign-in-codes";
 import { sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { getEnv } from "../env";
 
@@ -45,6 +46,10 @@ export function authRoutes(db: AppDb) {
     const member = db.select().from(members).where(eq(members.id, c.get("member").id)).get()!;
     return c.json({ link: magicLink(member.linkToken) });
   });
+
+  // A one-time code for signing in on another device, such as the home-screen app on a phone,
+  // which can't open links. Shown once and never stored in plain text.
+  app.post("/code", (c) => c.json(createSignInCode(db, c.get("member").id)));
 
   app.post("/logout", (c) => {
     const sessionId = getCookie(c, "session_id");

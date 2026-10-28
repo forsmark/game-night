@@ -1,0 +1,11 @@
+{
+  "name": "Game Night",
+  "short_name": "Game Night",
+  "description": "Monthly board game night: answer, suggest games and vote.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#6c587b",
+  "background_color": "#e8cdb8",
+  "icons": [{ "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }]
+}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { db, runMigrations } from "../src/server/db/client";
-import { members, rsvps, sessions, settings } from "../src/server/db/schema";
+import { members, rsvps, sessions, settings, signInCodes } from "../src/server/db/schema";
 import { createApp } from "../src/server/app";
 import { createSession, magicLink } from "../src/server/auth/sessions";
 import { getInvite } from "../src/server/routes/invite";
@@ -15,7 +15,7 @@ const saved = { BASE_URL: process.env.BASE_URL, SHARE_BASE_URL: process.env.SHAR
 let host = { id: "", token: "", cookie: "" };
 
 beforeEach(() => {
-  for (const table of [rsvps, sessions, members, settings]) db.delete(table).run();
+  for (const table of [signInCodes, rsvps, sessions, members, settings]) db.delete(table).run();
   process.env.BASE_URL = "https://game-night.example.ts.net";
   delete process.env.SHARE_BASE_URL;
   host = { id: randomUUID(), token: randomUUID(), cookie: "" };
@@ -47,6 +47,27 @@ describe("app icon", () => {
   });
 });
 
+describe("home-screen app", () => {
+  // People add the app to their iPhone home screen. Without a manifest and the iOS meta tags it
+  // opens as a plain browser bookmark, without the app icon and name.
+  it("has a web app manifest that opens standalone at the start page", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+    expect(manifest).toMatchObject({ name: "Game Night", display: "standalone", start_url: "/" });
+    expect(manifest.icons).toContainEqual(expect.objectContaining({ src: "/icon.png", sizes: "512x512" }));
+    // The design tokens' violet and table-top peach, so the splash screen matches the app.
+    expect(manifest.theme_color).toBe("#6c587b");
+    expect(manifest.background_color).toBe("#e8cdb8");
+  });
+
+  it("links the manifest and the iOS tags from the page", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest"');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icon.png"');
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes"');
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="Game Night"');
+  });
+});
+
 describe("response headers", () => {
   // Without no-referrer, a page opened from /j/<token> could hand the token to the next site.
   it.each([
@@ -64,7 +85,7 @@ describe("response headers", () => {
 });
 
 describe("logging", () => {
-  it("never writes a personal or group link token to the logs", async () => {
+  it("never writes a personal or group link token, or a code, to the logs", async () => {
     // Personal links and the group link are passwords, and the journal is not a safe place for them.
     // A request logger (hono/logger or similar) would print the path and make this fail.
     const output: string[] = [];
@@ -85,9 +106,20 @@ describe("logging", () => {
       body: JSON.stringify({ name: "Anna" }),
     });
 
+    // Codes are passwords too: the group code, and a sign-in code both made and spent.
+    const json = { "Content-Type": "application/json" };
+    const groupCode = getInvite(db).code;
+    await logged.request("/api/code", { method: "POST", headers: json, body: JSON.stringify({ code: groupCode }) });
+    const made = await logged.request("/api/auth/code", { method: "POST", headers: { Cookie: host.cookie } });
+    const signInCode = (await made.json()).code;
+    await logged.request("/api/code", { method: "POST", headers: json, body: JSON.stringify({ code: signInCode }) });
+    await logged.request("/api/code", { method: "POST", headers: json, body: JSON.stringify({ code: signInCode }) });
+
     const all = output.join("\n");
     expect(all).not.toContain(host.token);
     expect(all).not.toContain(invite);
+    expect(all).not.toContain(groupCode);
+    expect(all).not.toContain(signInCode);
   });
 });
 

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppDb } from "../db/client";
 import { members, rsvps, settings } from "../db/schema";
 import { newLinkToken, shareLink } from "../auth/sessions";
+import { freshCode, GROUP_CODE_KEY } from "../auth/sign-in-codes";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { startSession } from "./auth";
 import { nextFreeColor } from "./members";
@@ -20,16 +21,22 @@ function setSetting(db: AppDb, key: string, value: string) {
   db.insert(settings).values({ key, value }).onConflictDoUpdate({ target: settings.key, set: { value } }).run();
 }
 
-// The group invite. The token is created the first time anyone asks for it.
+// The group invite: a link for the chat and a short code to type in. Both are created the first
+// time anyone asks for them, so installs from before the code existed get one too.
 export function getInvite(db: AppDb) {
   let token = getSetting(db, "invite_token");
   if (!token) {
     token = newLinkToken();
     setSetting(db, "invite_token", token);
   }
+  let code = getSetting(db, GROUP_CODE_KEY);
+  if (!code) {
+    code = freshCode(db);
+    setSetting(db, GROUP_CODE_KEY, code);
+  }
   const limit = Number(getSetting(db, "invite_limit") ?? DEFAULT_LIMIT);
   const used = db.select({ n: sql<number>`count(*)` }).from(members).get()!.n;
-  return { token, limit, used, link: shareLink("i", token) };
+  return { token, code, limit, used, link: shareLink("i", token) };
 }
 
 const joinBody = z.object({
@@ -109,8 +116,8 @@ export function inviteRoutes(db: AppDb) {
   app.use("*", sessionMiddleware(db), requireHost);
 
   const view = () => {
-    const { link, limit, used } = getInvite(db);
-    return { link, limit, used };
+    const { link, code, limit, used } = getInvite(db);
+    return { link, code, limit, used };
   };
 
   app.get("/", (c) => c.json(view()));
@@ -122,9 +129,11 @@ export function inviteRoutes(db: AppDb) {
     return c.json(view());
   });
 
-  // Replaces the group link. People who already joined stay signed in.
+  // Replaces the group link and the group code together, since either one lets people join.
+  // People who already joined stay signed in.
   app.post("/new-link", (c) => {
     setSetting(db, "invite_token", newLinkToken());
+    setSetting(db, GROUP_CODE_KEY, freshCode(db));
     return c.json(view());
   });
 

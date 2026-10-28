@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AppDb } from "../db/client";
 import { members, sessions } from "../db/schema";
 import { magicLink, newLinkToken } from "../auth/sessions";
+import { createSignInCode } from "../auth/sign-in-codes";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { MEEPLE_COLORS } from "../../shared/meeples";
 
@@ -66,6 +67,14 @@ export function membersRoutes(db: AppDb) {
     db.delete(sessions).where(eq(sessions.memberId, id)).run();
     const member = db.select().from(members).where(eq(members.id, id)).get();
     return member ? c.json(toDto(member)) : c.json({ error: { code: "NOT_FOUND", message: "No such member" } }, 404);
+  });
+
+  // A one-time sign-in code for a player, to read out to them. The host can already copy their
+  // personal link, so this gives the host no new power.
+  app.post("/:id/code", (c) => {
+    const member = db.select().from(members).where(eq(members.id, c.req.param("id"))).get();
+    if (!member) return c.json({ error: { code: "NOT_FOUND", message: "No such member" } }, 404);
+    return c.json(createSignInCode(db, member.id));
   });
 
   app.delete("/:id", (c) => {

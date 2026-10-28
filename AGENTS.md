@@ -50,7 +50,7 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 - **BGG access:** the XML API needs `BGG_TOKEN` and the app works without it. The BGG website returns 403 to automated requests. Don't scrape it or work around the block. Without a token, games come from the CSV import or the manual form.
 - **Database:** don't edit the SQLite file while the server runs. If you must use the `sqlite3` command line, run `PRAGMA foreign_keys=ON;` first. Without it, deleting a member leaves their answers and votes behind.
 - **Design:** cut paper on a wooden table. Use the tokens in `index.css`, `.paper`, `.paper-well`, `.paper-piece`, `.paper-chip` and the shadcn components in `components/ui`. Don't add new colours. Coral (`--vote`) is for votes only. Animations go through Framer Motion, which turns them off for people who prefer reduced motion.
-- **Request hygiene:** never add a request logger or log a request path. `/j/<token>` and `/i/<token>` carry tokens. Every response gets `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff` from the middleware in `app.ts`. `tests/hosting.test.ts` checks both.
+- **Request hygiene:** never add a request logger or log a request path. `/j/<token>` and `/i/<token>` carry tokens. Codes are secrets too: only in POST bodies, never logged, sign-in codes stored as SHA-256 hashes. Every response gets `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff` from the middleware in `app.ts`. `tests/hosting.test.ts` checks both.
 - **Links:** build group and personal links on the server with `shareLink` in `auth/sessions.ts`, never in the frontend. It uses `SHARE_BASE_URL` when set, otherwise `BASE_URL`.
 - **UI text:** plain and specific, in sentence case. A button names its action ("Plan night", "Copy link"). Errors say what went wrong and how to fix it. No emoji.
 
@@ -74,13 +74,14 @@ To act as the host, use the host's personal link. Run `podman exec game-night no
 ### Secrets and permissions
 
 - **Personal links** are passwords. Never post, log or send them anywhere except to their owner.
-- **The group link** (`/i/<token>`) is meant for the group chat. Anyone with it can join until the group is full.
+- **The group link** (`/i/<token>`) is meant for the group chat. Anyone with it can join until the group is full. The group code is the same thing in typeable form.
+- **Sign-in codes** are passwords for 10 minutes. Send them only in a POST body, never in a URL, and never log them. Wrong guesses lock the code box for everyone for a while, so don't try codes in a loop.
 - **Acting for a person:** don't answer, vote or suggest on behalf of someone unless that person asked you to.
 - **Ask the host first** before any of these: deleting a night, removing a player, making a new link (it signs the player out everywhere), replacing the shelf with an import, or changing the group limit.
 
 ### Endpoints
 
-All `/api` routes except `/api/health` and `/api/join` need the session cookie. Outside `/api`, nothing does: `/healthz`, `/j/<token>`, the pages and static files such as `/icon.png` are public. Routes marked **host** return 403 for guests. Errors look like `{"error": {"code", "message"}}`.
+All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the session cookie. Outside `/api`, nothing does: `/healthz`, `/j/<token>`, the pages and static files such as `/icon.png` are public. Routes marked **host** return 403 for guests. Errors look like `{"error": {"code", "message"}}`.
 
 **Nights**
 
@@ -116,12 +117,15 @@ All `/api` routes except `/api/health` and `/api/join` need the session cookie. 
 | Method and path | Who | What it does |
 |-----------------|-----|--------------|
 | `GET /api/auth/link` | all | The signed-in person's own personal link |
-| `GET /api/invite` | host | `{"link", "limit", "used"}` for the group link |
+| `POST /api/auth/code` | all | `{"code", "expiresAt"}`: a one-time sign-in code for yourself, valid 10 minutes. Replaces your previous unused code |
+| `POST /api/code` | anyone | `{"code"}`, the code box on the welcome page. The group code returns `{"kind": "group", "token"}` (open `/i/<token>` to join). A sign-in code sets the session and returns `{"kind": "signin", "member"}`. Unknown or spent: 404. After 10 wrong codes in a minute or 100 in a day, for everyone together: 429 |
+| `GET /api/invite` | host | `{"link", "code", "limit", "used"}` for the group link and group code |
 | `PATCH /api/invite` | host | `{"limit"}`, from 2 to 50 |
-| `POST /api/invite/new-link` | host | New group link. The old one stops working |
+| `POST /api/invite/new-link` | host | New group link and group code. The old ones stop working |
 | `GET /api/members` | host | Everyone, with their personal links |
 | `POST /api/members` | host | Add a player by hand: `{"name"}` |
 | `PATCH /api/members/:id` | host | `{"name", "color"}` |
+| `POST /api/members/:id/code` | host | A one-time sign-in code for that player |
 | `POST /api/members/:id/new-link` | host | New personal link. Signs that player out everywhere |
 | `DELETE /api/members/:id` | host | Remove a player and their answers, votes and suggestions |
 

@@ -1,12 +1,14 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { CalendarDays, Copy, Library, Settings, Moon, Sun } from "lucide-react";
+import { useState } from "react";
+import { CalendarDays, Copy, KeyRound, Library, Settings, Moon, Sun } from "lucide-react";
 import { Popover } from "radix-ui";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useMyLink } from "@/lib/queries/invite";
 import { useTheme } from "next-themes";
 import { Meeple } from "@/components/pieces/meeple";
+import { SignInCodeDialog } from "@/components/sign-in-code";
 import type { CurrentMember } from "@/lib/auth-context";
 
 function ThemeToggle() {
@@ -38,6 +40,8 @@ function ThemeToggle() {
 
 function MeMenu({ member }: { member: CurrentMember }) {
   const myLink = useMyLink();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   const copy = async () => {
     const { data } = await myLink.refetch();
@@ -47,28 +51,41 @@ function MeMenu({ member }: { member: CurrentMember }) {
   };
 
   return (
-    <Popover.Root>
-      <Popover.Trigger
-        aria-label={`Signed in as ${member.name}`}
-        className="flex items-center gap-1.5 rounded-full py-2 pr-3 pl-2 text-sm font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <Meeple color={member.color} size={20} />
-        <span className="hidden sm:inline">{member.name}</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content align="end" sideOffset={8} className="paper z-50 flex w-72 flex-col gap-3 p-4">
-          <p className="text-sm">
-            Signed in as <span className="font-semibold">{member.name}</span>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Your personal link signs you in as yourself on another phone or computer. Keep it to yourself.
-          </p>
-          <Button variant="outline" className="rounded-full" onClick={copy}>
-            <Copy /> Copy your link
-          </Button>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <>
+      <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+        <Popover.Trigger
+          aria-label={`Signed in as ${member.name}`}
+          className="flex items-center gap-1.5 rounded-full py-2 pr-3 pl-2 text-sm font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <Meeple color={member.color} size={20} />
+          <span className="hidden sm:inline">{member.name}</span>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content align="end" sideOffset={8} className="paper z-50 flex w-72 flex-col gap-3 p-4">
+            <p className="text-sm">
+              Signed in as <span className="font-semibold">{member.name}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Sign in as yourself on another phone or computer with a one-time code, or with your personal link.
+              Keep both to yourself. The code also works in the app on your home screen.
+            </p>
+            <Button
+              className="rounded-full"
+              onClick={() => {
+                setMenuOpen(false);
+                setCodeOpen(true);
+              }}
+            >
+              <KeyRound /> Sign in on another device
+            </Button>
+            <Button variant="outline" className="rounded-full" onClick={copy}>
+              <Copy /> Copy your link
+            </Button>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      <SignInCodeDialog open={codeOpen} onOpenChange={setCodeOpen} />
+    </>
   );
 }
 
