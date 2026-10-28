@@ -9,12 +9,16 @@ After=network-online.target
 [Container]
 ContainerName=game-night
 Image=localhost/game-night:latest
-# Only reachable from this machine. Tailscale Funnel forwards to it.
-PublishPort=127.0.0.1:3002:3002
-Volume=game-night-data:/app/data
-# BASE_URL and BGG_TOKEN. See .env.example.
+# Only reachable from this machine, on port 3002. Tailscale Funnel forwards to it.
+# The app listens on 3000 inside the container.
+PublishPort=127.0.0.1:3002:3000
+# The image keeps the database in /data. The volume's contents don't depend on where it's mounted.
+Volume=game-night-data:/data
+# BASE_URL, SHARE_BASE_URL and BGG_TOKEN. See .env.example.
 EnvironmentFile=%h/game-night/.env
-HealthCmd=node -e "fetch('http://127.0.0.1:3002/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Set here as well, so a PORT or DATABASE_PATH copied into .env from .env.example can't move them.
+Environment=PORT=3000 DATABASE_PATH=/data/game-night.db
+HealthCmd=wget -qO- http://localhost:3000/healthz
 HealthInterval=30s
 
 [Service]

@@ -4,9 +4,8 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDb } from "../db/client";
 import { members, rsvps, settings } from "../db/schema";
-import { newLinkToken } from "../auth/sessions";
+import { newLinkToken, shareLink } from "../auth/sessions";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
-import { getEnv } from "../env";
 import { startSession } from "./auth";
 import { nextFreeColor } from "./members";
 import { nextEvent } from "./events";
@@ -30,7 +29,7 @@ export function getInvite(db: AppDb) {
   }
   const limit = Number(getSetting(db, "invite_limit") ?? DEFAULT_LIMIT);
   const used = db.select({ n: sql<number>`count(*)` }).from(members).get()!.n;
-  return { token, limit, used, link: `${getEnv().baseUrl}/i/${token}` };
+  return { token, limit, used, link: shareLink("i", token) };
 }
 
 const joinBody = z.object({

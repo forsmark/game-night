@@ -18,6 +18,10 @@ sqlite.pragma("foreign_keys = ON");
 
 export const db: AppDb = drizzle(sqlite, { schema });
 
+export function closeDb() {
+  sqlite.close();
+}
+
 export function runMigrations() {
   migrate(db, { migrationsFolder: "./drizzle" });
 }

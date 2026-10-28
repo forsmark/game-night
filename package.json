@@ -15,6 +15,7 @@
     "db:migrate": "tsx src/server/db/migrate.ts",
     "host:link": "tsx src/server/seed/host-link.ts",
     "seed:demo": "tsx src/server/seed/seed-demo.ts",
+    "icon": "node scripts/make-icon.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

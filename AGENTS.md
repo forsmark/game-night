@@ -36,6 +36,7 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 | `src/frontend/lib/physics.ts` | Piece physics. Pure functions |
 | `src/frontend/index.css` | Design tokens and the `.paper` surface classes |
 | `src/shared/` | Code both sides import, such as meeple colours |
+| `scripts/make-icon.mjs` | Draws `public/icon.png` (512x512). Run with `pnpm icon` |
 | `tests/` | Tests. API tests run the real app on an in-memory database |
 
 ### Rules
@@ -49,17 +50,19 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 - **BGG access:** the XML API needs `BGG_TOKEN` and the app works without it. The BGG website returns 403 to automated requests. Don't scrape it or work around the block. Without a token, games come from the CSV import or the manual form.
 - **Database:** don't edit the SQLite file while the server runs. If you must use the `sqlite3` command line, run `PRAGMA foreign_keys=ON;` first. Without it, deleting a member leaves their answers and votes behind.
 - **Design:** cut paper on a wooden table. Use the tokens in `index.css`, `.paper`, `.paper-well`, `.paper-piece`, `.paper-chip` and the shadcn components in `components/ui`. Don't add new colours. Coral (`--vote`) is for votes only. Animations go through Framer Motion, which turns them off for people who prefer reduced motion.
+- **Request hygiene:** never add a request logger or log a request path. `/j/<token>` and `/i/<token>` carry tokens. Every response gets `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff` from the middleware in `app.ts`. `tests/hosting.test.ts` checks both.
+- **Links:** build group and personal links on the server with `shareLink` in `auth/sessions.ts`, never in the frontend. It uses `SHARE_BASE_URL` when set, otherwise `BASE_URL`.
 - **UI text:** plain and specific, in sentence case. A button names its action ("Plan night", "Copy link"). Errors say what went wrong and how to fix it. No emoji.
 
 ## Part 2: Using the running app
 
-The app runs at the address in `BASE_URL`, for example `https://olympus.<tailnet>.ts.net:8443`. Everything is JSON over `/api`.
+The app runs at the address in `BASE_URL`, for example `https://game-night.<tailnet>.ts.net`. Everything is JSON over `/api`. `GET /healthz` returns 200 when the server is up.
 
-On the home server it runs as the Podman container `game-night`, managed by systemd (`systemctl --user status game-night`). Logs: `journalctl --user -u game-night`. The database is in the volume `game-night-data`. Run one-off scripts inside the container, for example `podman exec game-night node dist-server/seed/host-link.js`.
+It's hosted on olympus-edge as a public app on its own Tailscale hostname. Run one-off scripts there with `portal app exec game-night -- node dist-server/seed/host-link.js`. A standalone install instead runs the Podman container `game-night` under systemd (`systemctl --user status game-night`, logs in `journalctl --user -u game-night`, database in the volume `game-night-data`), and scripts run with `podman exec game-night node dist-server/seed/host-link.js`.
 
 ### Signing in
 
-The app has no passwords and no API keys. Every person has a personal link, `BASE_URL/j/<token>`. Opening it sets a `session_id` cookie that lasts 180 days. An agent signs in the same way and keeps the cookie:
+The app has no passwords and no API keys. Every person has a personal link, `BASE_URL/j/<token>`. Opening it sets a `session_id` cookie that lasts 180 days. With `SHARE_BASE_URL` set, the app hands out links as `${SHARE_BASE_URL}j/<token>` (for example `https://forsmark.github.io/game-night/#j/<token>`), a page that forwards to `BASE_URL/j/<token>` with JavaScript. curl doesn't run it, so take the token from the end of the link and open `BASE_URL/j/<token>` directly. The group link works the same way with `i/`. An agent signs in the same way and keeps the cookie:
 
 ```bash
 curl -s -c jar.txt -o /dev/null "$BASE_URL/j/<token>"   # sign in
@@ -77,7 +80,7 @@ To act as the host, use the host's personal link. Run `podman exec game-night no
 
 ### Endpoints
 
-All `/api` routes except `/api/health` and `/api/join` need the session cookie. Routes marked **host** return 403 for guests. Errors look like `{"error": {"code", "message"}}`.
+All `/api` routes except `/api/health` and `/api/join` need the session cookie. Outside `/api`, nothing does: `/healthz`, `/j/<token>`, the pages and static files such as `/icon.png` are public. Routes marked **host** return 403 for guests. Errors look like `{"error": {"code", "message"}}`.
 
 **Nights**
 

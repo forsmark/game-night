@@ -31,6 +31,14 @@ export function newLinkToken() {
   return randomBytes(24).toString("base64url");
 }
 
+// The address people open: `/j/<token>` for a personal link, `/i/<token>` for the group link.
+// With SHARE_BASE_URL set, the link goes through that address instead, for example
+// `https://forsmark.github.io/game-night/#j/<token>`, which forwards to BASE_URL.
+export function shareLink(kind: "i" | "j", token: string) {
+  const { baseUrl, shareBaseUrl } = getEnv();
+  return shareBaseUrl ? `${shareBaseUrl}${kind}/${token}` : `${baseUrl}/${kind}/${token}`;
+}
+
 export function magicLink(token: string) {
-  return `${getEnv().baseUrl}/j/${token}`;
+  return shareLink("j", token);
 }

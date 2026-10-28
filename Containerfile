@@ -22,10 +22,17 @@ RUN rm -rf node_modules && pnpm install --frozen-lockfile --prod
 
 # --- Run -------------------------------------------------------------------
 FROM docker.io/library/node:22-bookworm-slim
+# olympus-edge passes the path the app is served under. Game Night is always served at the
+# root of its own hostname (APP_BASE=/), so the build ignores it.
+ARG APP_BASE=/
+# wget is for health checks: olympus-edge runs `wget -qO- http://localhost:3000/healthz`.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wget \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=3002 \
-    DATABASE_PATH=/app/data/game-night.db
+    PORT=3000 \
+    DATABASE_PATH=/data/game-night.db
 
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
@@ -33,12 +40,13 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-server ./dist-server
 COPY --from=build /app/drizzle ./drizzle
 
-# The database lives here. Mount a volume on it to keep data between containers.
-RUN mkdir -p /app/data && chown node:node /app/data
-VOLUME /app/data
+# The database lives here. Mount a volume or directory on it to keep data between containers.
+# The node user is uid 1000, which olympus-edge maps to its own user.
+RUN mkdir -p /data && chown node:node /data
+VOLUME /data
 USER node
 
-EXPOSE 3002
+EXPOSE 3000
 # Podman keeps this only when building with --format docker. The Quadlet file sets its own.
-HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://127.0.0.1:3002/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:3000/healthz >/dev/null || exit 1
 CMD ["node", "dist-server/index.js"]

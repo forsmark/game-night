@@ -63,6 +63,7 @@ The app runs as a Podman container, started by systemd through a Quadlet file. T
    BGG_TOKEN=
    ```
    `BASE_URL` must be the public address, because the group link and the personal links use it.
+   Optionally add `SHARE_BASE_URL` to hand out links through another address, such as a redirect page (see [Share links](#share-links)).
 4. Start the container:
    ```bash
    mkdir -p ~/.config/containers/systemd
@@ -82,11 +83,27 @@ The app runs as a Podman container, started by systemd through a Quadlet file. T
 
 To update: `git pull && podman build -t game-night . && systemctl --user restart game-night`. Migrations run when the container starts.
 
+The container listens on port 3000 and keeps the database in `/data`. The Quadlet file publishes it on `127.0.0.1:3002` and mounts the `game-night-data` volume there. `GET /healthz` returns 200 when the server is up and needs no session. The image's health check calls it with `wget`.
+
 To back up the database: `podman volume export game-night-data > game-night-backup.tar`.
 
 ### Without a container
 
 `deploy/game-night.service` runs the app directly with Node 22 or later. Install with `pnpm install --frozen-lockfile && pnpm build`, create `.env` as above, run `pnpm host:link "Marc"`, then copy the service file to `~/.config/systemd/user/` and run `systemctl --user enable --now game-night`. Check `which node` and fix the service's `PATH` line if node lives elsewhere.
+
+## Share links
+
+By default the group link is `BASE_URL/i/<token>` and personal links are `BASE_URL/j/<token>`. With `SHARE_BASE_URL` set, they become `${SHARE_BASE_URL}i/<token>` and `${SHARE_BASE_URL}j/<token>`. The value is used as is and must contain a `#`, so the token stays in the fragment; the app refuses to start otherwise.
+
+For example, `SHARE_BASE_URL=https://forsmark.github.io/game-night/#` gives links like `https://forsmark.github.io/game-night/#i/<token>`. That page forwards to `/i/<token>` on the app. The token is in the fragment, which browsers never send to GitHub.
+
+In a `.env` file that Node reads (`pnpm dev`, `pnpm start`, the systemd service), quote the value: `SHARE_BASE_URL="https://forsmark.github.io/game-night/#"`. Without quotes, Node reads everything from `#` on as a comment. The app removes the quotes when Podman passes them through. A value cut off at the `#` makes the app refuse to start.
+
+## Host on olympus-edge
+
+On the olympus-edge home server, Game Night runs as a public app on its own Tailscale hostname, for example `https://game-night.<tailnet>.ts.net/`. The platform builds this Containerfile, mounts the app's data directory on `/data`, health-checks `/healthz` and sets `BASE_URL` and `SHARE_BASE_URL` with `portal app env set`. Run one-off scripts with `portal app exec game-night -- node dist-server/seed/host-link.js "Marc"`.
+
+Nothing sits in front of the app there, so the app itself sends `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff`, serves `/icon.png` without a session, and never logs request paths, because `/i/<token>` and `/j/<token>` carry tokens. Regenerate the icon with `pnpm icon`.
 
 ## Tests
 
