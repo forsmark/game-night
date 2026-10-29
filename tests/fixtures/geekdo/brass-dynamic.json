@@ -1,0 +1,31 @@
+{
+  "item": {
+    "rankinfo": [
+      {
+        "rank": "1",
+        "prettyname": "Board Game Rank"
+      }
+    ],
+    "polls": {
+      "boardgameweight": {
+        "averageweight": 3.8595959595959597,
+        "votes": "2970"
+      },
+      "userplayers": {
+        "best": [
+          {
+            "min": 3,
+            "max": 4
+          }
+        ],
+        "recommended": [
+          {
+            "min": 2,
+            "max": 4
+          }
+        ],
+        "totalvotes": "1457"
+      }
+    }
+  }
+}

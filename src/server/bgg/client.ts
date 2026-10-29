@@ -3,10 +3,11 @@ import { inArray } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { games } from "../db/schema";
 import { getEnv } from "../env";
+import { fetchGeekdoGame } from "./geekdo";
 
 const API = "https://boardgamegeek.com/xmlapi2";
 // BGG rejects /thing requests with more ids than this.
-const THING_BATCH = 20;
+export const THING_BATCH = 20;
 const MAX_ATTEMPTS = 6;
 
 export class BggError extends Error {}
@@ -122,6 +123,11 @@ export function parseCollectionIds(xml: any): number[] {
   return (xml?.items?.item ?? []).map((item: any) => Number(item.objectid));
 }
 
+// Up to THING_BATCH games from the XML API. Needs the token.
+export async function fetchThings(bggIds: number[]): Promise<BggGame[]> {
+  return parseThings(await fetchXml(`/thing?stats=1&id=${bggIds.join(",")}`));
+}
+
 export async function searchGames(query: string): Promise<BggSearchResult[]> {
   const xml = await fetchXml(`/search?type=boardgame&query=${encodeURIComponent(query)}`);
   return parseSearch(xml);
@@ -151,10 +157,20 @@ export async function ensureGames(db: AppDb, bggIds: number[], { refresh = false
   );
   const missing = refresh ? unique : unique.filter((id) => !known.has(id));
 
+  // Without a token, ask geekdo one game at a time, paced like someone clicking through BGG.
+  if (!getEnv().bggToken) {
+    for (const [i, bggId] of missing.entries()) {
+      if (i > 0) await sleep(1000);
+      const game = await fetchGeekdoGame(bggId);
+      if (game) db.insert(games).values(game).onConflictDoUpdate({ target: games.bggId, set: game }).run();
+    }
+    return;
+  }
+
   for (let i = 0; i < missing.length; i += THING_BATCH) {
     if (i > 0) await sleep(2000);
     const batch = missing.slice(i, i + THING_BATCH);
-    const fetched = parseThings(await fetchXml(`/thing?stats=1&id=${batch.join(",")}`));
+    const fetched = await fetchThings(batch);
     for (const game of fetched) {
       db.insert(games).values(game).onConflictDoUpdate({ target: games.bggId, set: game }).run();
     }

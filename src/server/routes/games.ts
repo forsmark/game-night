@@ -2,9 +2,11 @@ import { Hono } from "hono";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDb } from "../db/client";
-import { games, shelf } from "../db/schema";
+import { catalogue, games, settings, shelf } from "../db/schema";
 import { BggError, ensureGames, fetchCollectionIds, searchGames, type BggGame } from "../bgg/client";
 import { parseCollectionCsv } from "../bgg/collection-csv";
+import { parseRanksCsv, searchKey } from "../bgg/ranks-csv";
+import { startImageFill } from "../bgg/images";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { getEnv } from "../env";
 
@@ -98,6 +100,31 @@ export function bggIdFromLink(link: string | null) {
   return match ? Number(match[1]) : null;
 }
 const importBody = z.object({ username: z.string().trim().min(1).max(60) });
+// The ranks file is about 11 MB.
+const ranksBody = z.object({ csv: z.string().min(1).max(30_000_000) });
+const CATALOGUE_KEY = "catalogue_imported_at";
+
+function catalogueInfo(db: AppDb) {
+  const count = db.select({ n: sql<number>`count(*)` }).from(catalogue).get()?.n ?? 0;
+  const importedAt = db.select().from(settings).where(eq(settings.key, CATALOGUE_KEY)).get()?.value ?? null;
+  return { games: count, importedAt };
+}
+
+// Every word must start a word in the name, so "heat" finds "Heat: Pedal to the Metal" but not
+// "Cheating Moth". Ranked games come first, best rank first, then the most rated.
+export function searchCatalogue(db: AppDb, query: string, limit = 20) {
+  const words = searchKey(query).trim().split(" ").filter(Boolean);
+  if (words.length === 0) return [];
+  // searchKey leaves only letters, digits and spaces, so the words can't hold LIKE wildcards.
+  const matches = words.map((word) => sql`${catalogue.search} like ${"% " + word + "%"}`);
+  return db
+    .select({ bggId: catalogue.bggId, name: catalogue.name, year: catalogue.year, kind: catalogue.kind })
+    .from(catalogue)
+    .where(and(...matches))
+    .orderBy(sql`${catalogue.rank} is null`, asc(catalogue.rank), sql`${catalogue.usersRated} desc`)
+    .limit(limit)
+    .all();
+}
 const csvBody = z.object({ csv: z.string().min(1).max(5_000_000), replace: z.boolean().default(false) });
 const baseBody = z.object({ baseId: z.number().int().positive().nullable() });
 
@@ -106,7 +133,33 @@ export function gamesRoutes(db: AppDb) {
   app.use("*", sessionMiddleware(db));
 
   // Whether BGG lookups work on this server. The app falls back to typing games in by hand.
-  app.get("/status", (c) => c.json({ bgg: Boolean(getEnv().bggToken) }));
+  // bgg: whether the XML API token is set. catalogue: the BGG game list search runs on.
+  app.get("/status", (c) => c.json({ bgg: Boolean(getEnv().bggToken), catalogue: catalogueInfo(db) }));
+
+  // Loads BGG's ranks file, replacing the list from the last upload.
+  app.post("/catalogue", requireHost, async (c) => {
+    const parsed = ranksBody.safeParse(await c.req.json());
+    if (!parsed.success) return c.json({ error: { code: "BAD_REQUEST", message: "Choose the ranks CSV file" } }, 400);
+    let list: ReturnType<typeof parseRanksCsv>;
+    try {
+      list = parseRanksCsv(parsed.data.csv);
+    } catch (error) {
+      return c.json({ error: { code: "BAD_REQUEST", message: (error as Error).message } }, 400);
+    }
+    if (list.length === 0) return c.json({ error: { code: "BAD_REQUEST", message: "The file has no games in it" } }, 400);
+
+    const now = new Date().toISOString();
+    db.transaction((tx) => {
+      tx.delete(catalogue).run();
+      // Seven columns a row stays well under SQLite's limit of 32,766 values per statement.
+      for (let i = 0; i < list.length; i += 1000) tx.insert(catalogue).values(list.slice(i, i + 1000)).run();
+      tx.insert(settings)
+        .values({ key: CATALOGUE_KEY, value: now })
+        .onConflictDoUpdate({ target: settings.key, set: { value: now } })
+        .run();
+    });
+    return c.json(catalogueInfo(db));
+  });
 
   app.post("/manual", async (c) => {
     const parsed = manualBody.safeParse(await c.req.json());
@@ -156,11 +209,13 @@ export function gamesRoutes(db: AppDb) {
     return c.json({ bggId, created: true }, 201);
   });
 
-  // Searches the games this app already knows (the shelf, and games typed in before),
-  // then BoardGameGeek when a token is set. BGG being off or down never fails the search.
+  // Searches the games this app already knows (the shelf, and games typed in before), then the
+  // BGG game list, then BoardGameGeek itself when a token is set. BGG being off or down never
+  // fails the search.
   app.get("/search", async (c) => {
     const q = c.req.query("q")?.trim() ?? "";
-    if (q.length < 2) return c.json({ results: [], bgg: "ok" });
+    const hasCatalogue = Boolean(db.select({ id: catalogue.bggId }).from(catalogue).limit(1).get());
+    if (q.length < 2) return c.json({ results: [], bgg: "ok", catalogue: hasCatalogue });
     const owned = shelfIds(db);
 
     const local = db
@@ -173,17 +228,30 @@ export function gamesRoutes(db: AppDb) {
       .all()
       .map((g) => ({ ...g, onShelf: owned.has(g.bggId), source: "known" as const }))
       .sort((a, b) => Number(b.onShelf) - Number(a.onShelf));
+    const seen = new Set(local.map((g) => g.bggId));
+    const fromList = searchCatalogue(db, q).filter((g) => !seen.has(g.bggId));
+    // The name search above misses "heat pedal" for "Heat: Pedal to the Metal", so a game the app
+    // already has can turn up here. It is still a known game.
+    const knownIds = fromList.length
+      ? new Set(db.select({ bggId: games.bggId }).from(games).where(inArray(games.bggId, fromList.map((g) => g.bggId))).all().map((g) => g.bggId))
+      : new Set<number>();
+    const listed = fromList.map((g) => ({
+      ...g,
+      onShelf: owned.has(g.bggId),
+      source: knownIds.has(g.bggId) ? ("known" as const) : ("catalogue" as const),
+    }));
+    for (const g of listed) seen.add(g.bggId);
+    const results = [...local, ...listed];
 
-    if (!getEnv().bggToken) return c.json({ results: local, bgg: "off" });
+    if (!getEnv().bggToken) return c.json({ results, bgg: "off", catalogue: hasCatalogue });
     try {
-      const known = new Set(local.map((g) => g.bggId));
       const remote = (await searchGames(q))
-        .filter((r) => !known.has(r.bggId))
+        .filter((r) => !seen.has(r.bggId))
         .slice(0, 25)
         .map((r) => ({ ...r, kind: null, onShelf: owned.has(r.bggId), source: "bgg" as const }));
-      return c.json({ results: [...local, ...remote], bgg: "ok" });
+      return c.json({ results: [...results, ...remote], bgg: "ok", catalogue: hasCatalogue });
     } catch (error) {
-      return c.json({ results: local, bgg: "error", message: bggErrorResponse(error).error.message });
+      return c.json({ results, bgg: "error", message: bggErrorResponse(error).error.message, catalogue: hasCatalogue });
     }
   });
 
@@ -231,6 +299,8 @@ export function shelfRoutes(db: AppDb) {
       baseGames: list.length - expansions.length,
       expansions: expansions.length,
       unmatched: expansions.filter((g) => !g.baseId).map((g) => g.name),
+      // The file has no box images. They are fetched in the background, about one a second.
+      imagesPending: startImageFill(db),
     });
   });
 

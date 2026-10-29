@@ -20,11 +20,14 @@ export function ManualGameForm({
   onSaved,
   bases,
   initialName = "",
+  initialLink = "",
 }: {
   submitLabel: string;
   onSaved: (bggId: number, name: string) => void;
   // What the person searched for, so they don't type it twice.
   initialName?: string;
+  // The game's BGG link, when it was picked from the game list but BGG didn't send its details.
+  initialLink?: string;
   // Shown only to the host on the shelf: lets the game be saved as an expansion.
   bases?: Game[];
 }) {
@@ -35,7 +38,7 @@ export function ManualGameForm({
   const [minTime, setMinTime] = useState("");
   const [maxTime, setMaxTime] = useState("");
   const [weight, setWeight] = useState<number | null>(null);
-  const [bggLink, setBggLink] = useState("");
+  const [bggLink, setBggLink] = useState(initialLink);
   const [baseId, setBaseId] = useState("");
 
   return (

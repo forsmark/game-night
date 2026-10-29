@@ -4,6 +4,7 @@ import { closeDb, db, runMigrations } from "./db/client";
 import { members } from "./db/schema";
 import { createApp } from "./app";
 import { getEnv } from "./env";
+import { startImageFill } from "./bgg/images";
 
 runMigrations();
 const app = createApp(db);
@@ -18,7 +19,9 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   }
   // The prefix isn't secret. Printing it shows at a glance if a .env file cut it short at the #.
   if (shareBaseUrl) console.log(`Links start with ${shareBaseUrl} (SHARE_BASE_URL).`);
-  if (!bggToken) console.log("BGG_TOKEN is not set. BoardGameGeek search and username import are off. Known games and the CSV import still work.");
+  if (!bggToken) console.log("BGG_TOKEN is not set. Game details come from geekdo, and username import is off.");
+  // Finishes a box image run that a restart cut short.
+  startImageFill(db);
 });
 
 // Node as PID 1 in a container ignores SIGTERM unless it handles it, so `podman stop` would wait

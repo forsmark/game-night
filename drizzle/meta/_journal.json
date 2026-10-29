@@ -29,6 +29,13 @@
       "when": 1793193388201,
       "tag": "0003_abandoned_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793273455039,
+      "tag": "0004_lowly_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

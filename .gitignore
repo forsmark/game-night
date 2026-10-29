@@ -9,3 +9,4 @@ data/
 .DS_Store
 collection.csv
 dist-server/
+boardgames_ranks*

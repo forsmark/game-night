@@ -40,6 +40,20 @@ export const games = sqliteTable("games", {
   fetchedAt: text("fetched_at").notNull(),
 });
 
+// BoardGameGeek's list of games, loaded from its ranks data dump. Search runs on this table.
+// It holds names and ids only. A game's details are looked up when someone picks it, and saved in games.
+export const catalogue = sqliteTable("catalogue", {
+  bggId: integer("bgg_id").primaryKey(),
+  name: text("name").notNull(),
+  // The name in lower case without accents or punctuation, after a space, so " word%" matches the start of a word.
+  search: text("search").notNull(),
+  year: integer("year"),
+  // BGG rank. Null for unranked games and for every expansion.
+  rank: integer("rank"),
+  usersRated: integer("users_rated").notNull(),
+  kind: text("kind", { enum: ["base", "expansion"] }).notNull(),
+});
+
 // The host's own collection.
 export const shelf = sqliteTable("shelf", {
   bggId: integer("bgg_id")

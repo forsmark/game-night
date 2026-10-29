@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Copy, KeyRound, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { Popover } from "radix-ui";
 import { toast } from "sonner";
 import { Meeple } from "@/components/pieces/meeple";
@@ -31,6 +31,7 @@ import {
   type Member,
 } from "@/lib/queries/members";
 import { useInviteSettings, useNewInviteLink, useSetInviteLimit } from "@/lib/queries/invite";
+import { useBggStatus, useImportCatalogue } from "@/lib/queries/games";
 import { MEEPLE_COLORS } from "../../shared/meeples";
 
 // A destructive button that asks "Sure?" on the first press instead of opening a browser dialog.
@@ -381,6 +382,61 @@ function PlayersTab() {
   );
 }
 
+// BGG's ranks file, the list of games that search runs on. Details and box images come from
+// BGG when someone picks a game, so the file only needs names and ids.
+function GamesTab() {
+  const status = useBggStatus();
+  const importCatalogue = useImportCatalogue();
+  const [file, setFile] = useState<File | null>(null);
+  const info = status.data?.catalogue;
+
+  return (
+    <section className="paper flex flex-col gap-3 p-4">
+      <h2 className="font-display text-2xl">BoardGameGeek game list</h2>
+      <p className="text-sm text-muted-foreground">
+        Search for games runs on BGG's list of every game. Load it once, and again now and then to pick up new games.
+      </p>
+      <p className="text-sm">
+        {info?.games
+          ? `${info.games.toLocaleString()} games, loaded ${new Date(info.importedAt!).toLocaleDateString()}.`
+          : "Not loaded yet. Search only finds games already added here."}
+      </p>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          if (!file) return;
+          importCatalogue.mutate(await file.text(), {
+            onSuccess: ({ games }) => {
+              toast.success(`Loaded ${games.toLocaleString()} games`);
+              setFile(null);
+              form.reset();
+            },
+          });
+        }}
+      >
+        <ol className="list-decimal pl-5 text-sm text-muted-foreground">
+          <li>Sign in to BoardGameGeek and open boardgamegeek.com/data_dumps/bg_ranks.</li>
+          <li>Download the file and unzip it.</li>
+          <li>Choose boardgames_ranks.csv here.</li>
+        </ol>
+        <Label htmlFor="ranks-file">Ranks file</Label>
+        <Input id="ranks-file" type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+        <Button type="submit" disabled={!file || importCatalogue.isPending} className="self-start rounded-full">
+          {importCatalogue.isPending ? (
+            <>
+              <Loader2 className="animate-spin" /> Loading the list
+            </>
+          ) : (
+            "Load game list"
+          )}
+        </Button>
+      </form>
+    </section>
+  );
+}
+
 export default function HostPage() {
   return (
     <div className="flex flex-col gap-6">
@@ -389,12 +445,16 @@ export default function HostPage() {
         <TabsList>
           <TabsTrigger value="nights">Nights</TabsTrigger>
           <TabsTrigger value="players">Players</TabsTrigger>
+          <TabsTrigger value="games">Games</TabsTrigger>
         </TabsList>
         <TabsContent value="nights" className="pt-4">
           <NightsTab />
         </TabsContent>
         <TabsContent value="players" className="pt-4">
           <PlayersTab />
+        </TabsContent>
+        <TabsContent value="games" className="pt-4">
+          <GamesTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,0 +1,24 @@
+{
+  "item": {
+    "objectid": 224517,
+    "objecttype": "thing",
+    "subtype": "boardgame",
+    "name": "Brass: Birmingham",
+    "yearpublished": "2018",
+    "minplayers": "2",
+    "maxplayers": "4",
+    "minplaytime": "60",
+    "maxplaytime": "120",
+    "minage": "14",
+    "imageurl": "https://cf.geekdo-images.com/x3zxjr-Vw5iU4yDPg70Jgw__itemrep/img/giNUMut4HAl-zWyQkGG0YchmuLI=/fit-in/246x300/filters:strip_icc()/pic3490053.jpg",
+    "images": {
+      "micro": "https://cf.geekdo-images.com/x3zxjr-Vw5iU4yDPg70Jgw__micro/img/4Od3GYCiqptga0VbmyumPbJlBsU=/fit-in/64x64/filters:strip_icc()/pic3490053.jpg",
+      "square200": "https://cf.geekdo-images.com/x3zxjr-Vw5iU4yDPg70Jgw__square200/img/dNf_NYkJhQ6h2K0zWxhzRmJfAg8=/200x200/filters:strip_icc()/pic3490053.jpg",
+      "thumb": "https://cf.geekdo-images.com/x3zxjr-Vw5iU4yDPg70Jgw__small/img/o18rjEemoWaVru9Y2TyPwuIaRfE=/fit-in/200x150/filters:strip_icc()/pic3490053.jpg"
+    },
+    "links": {
+      "expandsboardgame": [],
+      "boardgameexpansion": []
+    }
+  }
+}

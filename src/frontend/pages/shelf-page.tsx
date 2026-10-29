@@ -48,6 +48,7 @@ function AddGameDialog({ owned, bases }: { owned: Set<number>; bases: Game[] }) 
           taken={owned}
           takenLabel="on the shelf"
           pending={add.isPending}
+          pickError={add.error}
           bases={bases}
           onPick={(bggId, name) =>
             add.mutate(bggId, {
@@ -80,6 +81,7 @@ function CsvImport({ onDone }: { onDone: () => void }) {
             onSuccess: (result) => {
               const parts = [`${result.baseGames} games and ${result.expansions} expansions on the shelf`];
               if (result.removed) parts.push(`${result.removed} removed`);
+              if (result.imagesPending) parts.push("Box images are loading and appear over the next few minutes");
               toast.success(parts.join(". ") + ".");
               if (result.unmatched.length) {
                 toast.warning(`Pick a base game for: ${result.unmatched.join(", ")}. They're listed at the bottom of the shelf.`);

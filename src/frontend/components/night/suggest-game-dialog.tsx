@@ -96,6 +96,7 @@ export function SuggestGameDialog({ eventId, nominated }: { eventId: string; nom
               takenLabel="already suggested"
               onPick={pick(true)}
               pending={nominate.isPending}
+              pickError={nominate.error}
               baseGamesOnly
             />
           </TabsContent>

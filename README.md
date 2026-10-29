@@ -36,13 +36,21 @@ Open the printed link to sign in. Then import your collection on the Shelf page 
 
 On your BGG collection page, choose **Export**, then **Download CSV**. On the Shelf page, choose **Import collection** and pick the file. "Replace the shelf" removes games that aren't in the file.
 
+The file has no box images. After the import, the server fetches them from BGG in the background, about one game a second, so a large collection takes a few minutes. If the server restarts before it's done, it carries on when it starts.
+
 The importer links each expansion to its base game by name, because the CSV doesn't say which game it expands. Expansions it can't match are listed at the bottom of the Shelf page, where the host picks the base game.
+
+## BoardGameGeek game list
+
+Search runs on BGG's list of every game. To load it, sign in to BoardGameGeek, download the file from <https://boardgamegeek.com/data_dumps/bg_ranks> and unzip it. On the Host page, open **Games** and choose `boardgames_ranks.csv`. Load a new file now and then to pick up new games.
+
+When someone picks a game the app doesn't know, the server looks up its player count, play time, weight and box image on BGG and saves them. If BGG doesn't answer, the person types the details in.
 
 ## BoardGameGeek token
 
-The app works without one. Players type in the games they bring, and the host imports the CSV.
+The app works without one. Lookups then go through geekdo, the undocumented JSON API BGG's own website uses, which can change without notice.
 
-With a token in `BGG_TOKEN`, players can search BGG, and **Import collection > By username** reads the collection with box images. That import refreshes every game, so games from the CSV and hand-typed games with a BGG link get their images too. Register an application at <https://boardgamegeek.com/applications> to get a token.
+With a token in `BGG_TOKEN`, players can also search BGG directly, and **Import collection > By username** reads the collection with box images. That import refreshes every game, so games from the CSV and hand-typed games with a BGG link get their images too. Register an application at <https://boardgamegeek.com/applications> to get a token.
 
 ## Deploy on the home server
 

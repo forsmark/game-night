@@ -29,6 +29,9 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 | `src/server/planner/plan.ts` | The table planner. Pure function |
 | `src/server/bgg/client.ts` | BGG XML API client and parsers |
 | `src/server/bgg/collection-csv.ts` | BGG collection CSV import |
+| `src/server/bgg/ranks-csv.ts` | BGG ranks file import, the game list search runs on |
+| `src/server/bgg/geekdo.ts` | Game lookups through geekdo, BGG's undocumented JSON API, when there is no token |
+| `src/server/bgg/images.ts` | Fills in box images for shelf games in the background, after a CSV import and when the server starts |
 | `src/server/db/schema.ts` | Drizzle schema. Migrations are in `drizzle/` |
 | `src/frontend/pages/` | One file per route |
 | `src/frontend/components/night/` | The night page: tables, vote cards, suggest dialog |
@@ -37,7 +40,7 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 | `src/frontend/index.css` | Design tokens and the `.paper` surface classes |
 | `src/shared/` | Code both sides import, such as meeple colours |
 | `scripts/make-icon.mjs` | Draws `public/icon.png` (512x512). Run with `pnpm icon` |
-| `tests/` | Tests. API tests run the real app on an in-memory database |
+| `tests/` | Tests. API tests run the real app on an in-memory database. `tests/setup.ts` blocks `fetch`, so no test reaches BGG. Stub it with fixtures where a test needs BGG |
 
 ### Rules
 
@@ -47,7 +50,7 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 - **Tests:** a test must say why the behaviour matters, and fail when that behaviour breaks. Keep logic pure where you can (planner, physics, parsers) and test it directly.
 - **Game ids:** `games.bggId` is the BoardGameGeek id. Games typed in by hand without a BGG link get negative ids. Code must handle negative ids. For example, `%` on a negative id gives a negative index, which once crashed the page. Never send a negative id to BGG. `ensureGames` already filters them out.
 - **Expansions:** expansions are stored with `kind = "expansion"` and `baseId`. Only base games can be suggested or voted on. An owned expansion can raise a game's player count through `maxWithExpansions`, and the planner uses that number.
-- **BGG access:** the XML API needs `BGG_TOKEN` and the app works without it. The BGG website returns 403 to automated requests. Don't scrape it or work around the block. Without a token, games come from the CSV import or the manual form.
+- **BGG access:** the XML API needs `BGG_TOKEN`, and is used when it's set. Without it, search runs on the `catalogue` table (BGG's ranks file, uploaded by the host). When someone picks a game the app doesn't know, `ensureGames` looks it up on `api.geekdo.com`, one game at a time, and saves it to `games` for good. geekdo is undocumented and can change, so a failed lookup returns 502 with code `BGG` and the picker offers the manual form. Fetch each game once. The only loop is the box image fill in `images.ts`: one game a second, each game tried once a run, and it stops at the first failure. Keep it that way. The rest of the BGG website returns 403 or a Cloudflare check to automated requests. Don't scrape it or work around the block. The research behind this is in `docs/bgg-data-research.md`.
 - **Database:** don't edit the SQLite file while the server runs. If you must use the `sqlite3` command line, run `PRAGMA foreign_keys=ON;` first. Without it, deleting a member leaves their answers and votes behind.
 - **Design:** cut paper on a wooden table. Use the tokens in `index.css`, `.paper`, `.paper-well`, `.paper-piece`, `.paper-chip` and the shadcn components in `components/ui`. Don't add new colours. Coral (`--vote`) is for votes only. Animations go through Framer Motion, which turns them off for people who prefer reduced motion.
 - **Request hygiene:** never add a request logger or log a request path. `/j/<token>` and `/i/<token>` carry tokens. Codes are secrets too: only in POST bodies, never logged, sign-in codes stored as SHA-256 hashes. Every response gets `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff` from the middleware in `app.ts`. `tests/hosting.test.ts` checks both.
@@ -103,13 +106,14 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 | Method and path | Who | What it does |
 |-----------------|-----|--------------|
 | `GET /api/shelf` | all | The host's games and expansions. Base games include `expansions` and `maxWithExpansions` |
-| `POST /api/shelf` | host | Add a game by id: `{"bggId"}`. Needs BGG unless the game is already known |
+| `POST /api/shelf` | host | Add a game by id: `{"bggId"}`. Looks up unknown games on BGG |
 | `DELETE /api/shelf/:bggId` | host | Remove a game from the shelf |
 | `PATCH /api/shelf/:bggId` | host | Link an expansion to its base game: `{"baseId"}` |
-| `POST /api/shelf/import-csv` | host | `{"csv": "<file text>", "replace": false}`. Imports a BGG collection export |
+| `POST /api/shelf/import-csv` | host | `{"csv": "<file text>", "replace": false}`. Imports a BGG collection export. The file has no box images, so the server then fetches them in the background, about one a second. `imagesPending` in the answer says how many shelf games still need one |
 | `POST /api/shelf/import` | host | `{"username"}`. Imports from BGG and refreshes images. Needs `BGG_TOKEN` |
-| `GET /api/games/status` | all | `{"bgg": true \| false}`: whether BGG lookups work |
-| `GET /api/games/search?q=` | all | `{"results", "bgg"}`. Searches games the app already knows, plus BGG when `BGG_TOKEN` is set. `bgg` is `"ok"`, `"off"` (no token) or `"error"` (BGG failed). The search never fails because of BGG. Each result has `source` (`"known"` or `"bgg"`) and `kind` (`null` for BGG results) |
+| `GET /api/games/status` | all | `{"bgg", "catalogue": {"games", "importedAt"}}`. `bgg` is whether `BGG_TOKEN` is set. `catalogue` is the BGG game list search runs on |
+| `POST /api/games/catalogue` | host | `{"csv": "<file text>"}`, BGG's ranks file unzipped (`boardgames_ranks.csv`). Replaces the game list. Returns `{"games", "importedAt"}` |
+| `GET /api/games/search?q=` | all | `{"results", "bgg", "catalogue"}`. Searches games the app already knows, then the BGG game list (matching the start of words, best rank first), plus BGG itself when `BGG_TOKEN` is set. `bgg` is `"ok"`, `"off"` (no token) or `"error"` (BGG failed). `catalogue` is whether the game list is loaded. The search never fails because of BGG. Each result has `source` (`"known"`, `"catalogue"` or `"bgg"`) and `kind` (`null` for BGG results) |
 | `POST /api/games/manual` | all | Add a game by hand: `{"name", "minPlayers", "maxPlayers", "minTime", "maxTime", "weight", "bggLink", "baseId"}`. Returns `{"bggId", "created"}`. Only the host can set `baseId` |
 
 **People and links**

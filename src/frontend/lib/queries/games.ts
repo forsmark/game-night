@@ -23,19 +23,29 @@ export type Game = {
 };
 
 export type Expansion = { bggId: number; name: string; minPlayers: number; maxPlayers: number };
-export type CsvImportResult = { added: number; removed: number; baseGames: number; expansions: number; unmatched: string[] };
+export type CsvImportResult = {
+  added: number;
+  removed: number;
+  baseGames: number;
+  expansions: number;
+  unmatched: string[];
+  // Shelf games still without a box image. The server fetches them in the background, about one a second.
+  imagesPending: number;
+};
 
 export type SearchResult = {
   bggId: number;
   name: string;
   year: number | null;
   onShelf: boolean;
-  // Known games know their kind. BGG search results don't until they are added.
+  // Known games and the BGG game list know their kind. BGG search results don't until they are added.
   kind: "base" | "expansion" | null;
-  source: "known" | "bgg";
+  // known: already in this app. catalogue: from the BGG game list. bgg: from BGG's own search.
+  source: "known" | "catalogue" | "bgg";
 };
-// bgg: "off" without a token, "error" when BGG failed. Known games are searched either way.
-export type SearchResponse = { results: SearchResult[]; bgg: "ok" | "off" | "error"; message?: string };
+// bgg: "off" without a token, "error" when BGG failed. catalogue: whether the BGG game list is loaded.
+export type SearchResponse = { results: SearchResult[]; bgg: "ok" | "off" | "error"; catalogue: boolean; message?: string };
+export type CatalogueInfo = { games: number; importedAt: string | null };
 
 function useDebounced<T>(value: T, ms: number) {
   const [debounced, setDebounced] = useState(value);
@@ -57,12 +67,23 @@ export type ManualGame = {
   baseId: number | null;
 };
 
-// Whether this server can look games up on BGG. Without it, games are typed in by hand.
+// bgg: whether this server has a BGG API token. catalogue: the BGG game list that search runs on.
 export function useBggStatus() {
   return useQuery({
     queryKey: ["games", "status"],
-    queryFn: () => apiClient.get<{ bgg: boolean }>("/games/status"),
+    queryFn: () => apiClient.get<{ bgg: boolean; catalogue: CatalogueInfo }>("/games/status"),
     staleTime: Infinity,
+  });
+}
+
+export function useImportCatalogue() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => apiClient.post<CatalogueInfo>("/games/catalogue", { csv }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["games", "status"] });
+      queryClient.invalidateQueries({ queryKey: ["games", "search"] });
+    },
   });
 }
 
@@ -108,9 +129,14 @@ export function useImportCsv() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { csv: string; replace: boolean }) => apiClient.post<CsvImportResult>("/shelf/import-csv", input),
-    onSuccess: () => {
+    onSuccess: ({ imagesPending }) => {
       queryClient.invalidateQueries({ queryKey: ["shelf"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
+      // Reload the shelf now and then, so box images show up as the server gets them.
+      if (imagesPending > 0) {
+        const timer = setInterval(() => queryClient.invalidateQueries({ queryKey: ["shelf"] }), 5000);
+        setTimeout(() => clearInterval(timer), imagesPending * 1500 + 10_000);
+      }
     },
   });
 }

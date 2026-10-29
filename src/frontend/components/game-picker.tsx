@@ -3,6 +3,8 @@ import { Check, Loader2, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ManualGameForm } from "@/components/manual-game-form";
+import { ApiError } from "@/lib/api-client";
+import { bggUrl } from "@/lib/format";
 import { useGameSearch, type Game } from "@/lib/queries/games";
 
 // Find a game by searching first. Typing it in by hand is the fallback, offered under the
@@ -15,6 +17,7 @@ export function GamePicker({
   pending,
   baseGamesOnly = false,
   bases,
+  pickError,
 }: {
   // What happens to a picked game, e.g. "I'll bring it" or "Add".
   actionLabel: string;
@@ -27,11 +30,35 @@ export function GamePicker({
   baseGamesOnly?: boolean;
   // For the shelf: lets a hand-typed game be saved as an expansion.
   bases?: Game[];
+  // The error from the last pick. When BGG didn't send the game's details, the picker offers
+  // to type them in, with the name and BGG link filled in.
+  pickError?: Error | null;
 }) {
   const [query, setQuery] = useState("");
   const [byHand, setByHand] = useState(false);
+  const [picked, setPicked] = useState<{ bggId: number; name: string } | null>(null);
   const search = useGameSearch(query);
   const typed = query.trim();
+
+  if (picked && pickError instanceof ApiError && pickError.code === "BGG") {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          BoardGameGeek didn't send the details for {picked.name}. Fill in the player count, and it's saved with its BGG link.
+        </p>
+        <ManualGameForm
+          submitLabel={actionLabel}
+          initialName={picked.name}
+          initialLink={bggUrl(picked.bggId) ?? ""}
+          bases={bases}
+          onSaved={onPick}
+        />
+        <Button variant="link" className="self-center" onClick={() => setPicked(null)}>
+          Back to search
+        </Button>
+      </div>
+    );
+  }
 
   if (byHand) {
     return (
@@ -51,9 +78,10 @@ export function GamePicker({
   return (
     <div className="flex flex-col gap-3">
       <Input placeholder="Search by the name on the box" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search for a game" autoFocus />
-      {search.data?.bgg === "off" && (
+      {search.data?.bgg === "off" && !search.data.catalogue && (
         <p className="text-xs text-muted-foreground">
-          BoardGameGeek search isn't set up on this server yet, so this searches games already added here.
+          The BoardGameGeek game list isn't loaded yet, so this searches games already added here. The host can load it on
+          the Host page.
         </p>
       )}
       {search.data?.bgg === "error" && (
@@ -76,7 +104,10 @@ export function GamePicker({
               <li key={result.bggId}>
                 <button
                   disabled={pending || isTaken}
-                  onClick={() => onPick(result.bggId, result.name)}
+                  onClick={() => {
+                    setPicked(result);
+                    onPick(result.bggId, result.name);
+                  }}
                   className="flex w-full items-center justify-between gap-3 rounded-lg p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-60"
                 >
                   <span className="min-w-0">

@@ -75,8 +75,11 @@ describe("games typed in by hand", () => {
     expect(res.status).toBe(400);
   });
 
-  it("reports that BGG lookups are off without a token", async () => {
-    expect(await (await call("guest", "GET", "/api/games/status")).json()).toEqual({ bgg: false });
+  it("reports that the BGG token is missing, so the host sees why username import is off", async () => {
+    expect(await (await call("guest", "GET", "/api/games/status")).json()).toEqual({
+      bgg: false,
+      catalogue: { games: 0, importedAt: null },
+    });
   });
 });
 
