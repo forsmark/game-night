@@ -36,7 +36,12 @@ async function fetchXml(path: string): Promise<any> {
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${bggToken}` } });
+    let res: Response;
+    try {
+      res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${bggToken}` } });
+    } catch {
+      throw new BggError("BoardGameGeek didn't answer. Try again in a minute.");
+    }
     // 202: BGG queued a collection export. 429: too many requests. Both mean "try again shortly".
     if (res.status === 202 || res.status === 429) {
       await sleep(2000 * attempt);
@@ -123,9 +128,10 @@ export function parseCollectionIds(xml: any): number[] {
   return (xml?.items?.item ?? []).map((item: any) => Number(item.objectid));
 }
 
-// Up to THING_BATCH games from the XML API. Needs the token.
-export async function fetchThings(bggIds: number[]): Promise<BggGame[]> {
-  return parseThings(await fetchXml(`/thing?stats=1&id=${bggIds.join(",")}`));
+// Up to THING_BATCH games from the XML API. Needs the token. Without stats the answer is
+// smaller and faster, but has no weight.
+export async function fetchThings(bggIds: number[], { stats = true } = {}): Promise<BggGame[]> {
+  return parseThings(await fetchXml(`/thing?${stats ? "stats=1&" : ""}id=${bggIds.join(",")}`));
 }
 
 export async function searchGames(query: string): Promise<BggSearchResult[]> {

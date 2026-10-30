@@ -42,6 +42,8 @@ export type SearchResult = {
   kind: "base" | "expansion" | null;
   // known: already in this app. catalogue: from the BGG game list. bgg: from BGG's own search.
   source: "known" | "catalogue" | "bgg";
+  // The box image when the app has it. useGameImages asks for the rest.
+  thumbnail: string | null;
 };
 // bgg: "off" without a token, "error" when BGG failed. catalogue: whether the BGG game list is loaded.
 export type SearchResponse = { results: SearchResult[]; bgg: "ok" | "off" | "error"; catalogue: boolean; message?: string };
@@ -101,6 +103,19 @@ export function useGameSearch(query: string) {
     queryFn: () => apiClient.get<SearchResponse>(`/games/search?q=${encodeURIComponent(q)}`),
     enabled: q.length >= 2,
     staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+// Box images for search results the server had none for. It fetches them from BGG in one
+// request when it has a token, and caches them, so they show up a moment after the results.
+export function useGameImages(bggIds: number[]) {
+  const ids = [...new Set(bggIds.filter((id) => id > 0))].slice(0, 20).sort((a, b) => a - b);
+  return useQuery({
+    queryKey: ["games", "images", ids.join(",")],
+    queryFn: () => apiClient.get<{ images: Record<number, string | null> }>(`/games/images?ids=${ids.join(",")}`),
+    enabled: ids.length > 0,
+    staleTime: Infinity,
     retry: false,
   });
 }

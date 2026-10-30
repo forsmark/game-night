@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { ManualGameForm } from "@/components/manual-game-form";
 import { ApiError } from "@/lib/api-client";
 import { bggUrl } from "@/lib/format";
-import { useGameSearch, type Game } from "@/lib/queries/games";
+import { GameTile } from "@/components/game-tile";
+import { useGameImages, useGameSearch, type Game } from "@/lib/queries/games";
 
 // Find a game by searching first. Typing it in by hand is the fallback, offered under the
 // results and as the main action when nothing matches.
@@ -72,11 +73,14 @@ export function GamePicker({
   }
 
   const results = (search.data?.results ?? []).filter((r) => !baseGamesOnly || r.kind !== "expansion");
+  // Images for the first results the server had none for. The rest keep the coloured box lid.
+  const images = useGameImages(results.filter((r) => !r.thumbnail).map((r) => r.bggId));
   const searched = typed.length >= 2 && search.isSuccess && !search.isFetching;
   const nothingFound = searched && results.length === 0;
 
   return (
-    <div className="flex flex-col gap-3">
+    // min-w-0: in a dialog this is a grid item, and long BGG names would otherwise widen it past the screen.
+    <div className="flex min-w-0 flex-col gap-3">
       <Input placeholder="Search by the name on the box" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search for a game" autoFocus />
       {search.data?.bgg === "off" && !search.data.catalogue && (
         <p className="text-xs text-muted-foreground">
@@ -110,7 +114,8 @@ export function GamePicker({
                   }}
                   className="flex w-full items-center justify-between gap-3 rounded-lg p-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-60"
                 >
-                  <span className="min-w-0">
+                  <GameTile game={{ ...result, thumbnail: result.thumbnail ?? images.data?.images[result.bggId] ?? null }} size={40} />
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{result.name}</span>
                     <span className="font-data text-xs text-muted-foreground">
                       {/* A Set drops "on the shelf" twice when that is also why it can't be picked. */}

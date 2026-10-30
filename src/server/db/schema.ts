@@ -54,6 +54,15 @@ export const catalogue = sqliteTable("catalogue", {
   kind: text("kind", { enum: ["base", "expansion"] }).notNull(),
 });
 
+// Box images for games that turn up in search, fetched from BGG once each. A null url means
+// BGG has no image for the game, so it isn't asked again. Kept apart from catalogue, so loading a
+// new game list doesn't throw the images away.
+export const gameImages = sqliteTable("game_images", {
+  bggId: integer("bgg_id").primaryKey(),
+  url: text("url"),
+  fetchedAt: text("fetched_at").notNull(),
+});
+
 // The host's own collection.
 export const shelf = sqliteTable("shelf", {
   bggId: integer("bgg_id")

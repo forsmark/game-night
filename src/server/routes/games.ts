@@ -3,10 +3,10 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDb } from "../db/client";
 import { catalogue, games, settings, shelf } from "../db/schema";
-import { BggError, ensureGames, fetchCollectionIds, searchGames, type BggGame } from "../bgg/client";
+import { BggError, ensureGames, fetchCollectionIds, searchGames, THING_BATCH, type BggGame } from "../bgg/client";
 import { parseCollectionCsv } from "../bgg/collection-csv";
 import { parseRanksCsv, searchKey } from "../bgg/ranks-csv";
-import { startImageFill } from "../bgg/images";
+import { cachedImages, fetchSearchImages, startImageFill } from "../bgg/images";
 import { requireHost, sessionMiddleware, type SessionEnv } from "../middleware/session";
 import { getEnv } from "../env";
 
@@ -241,18 +241,47 @@ export function gamesRoutes(db: AppDb) {
       source: knownIds.has(g.bggId) ? ("known" as const) : ("catalogue" as const),
     }));
     for (const g of listed) seen.add(g.bggId);
+    // Box images the app already has. The picker asks /images for the rest.
+    const withImages = <T extends { bggId: number }>(list: T[]) => {
+      const images = cachedImages(db, list.map((g) => g.bggId));
+      return list.map((g) => ({ ...g, thumbnail: images[g.bggId] ?? null }));
+    };
     const results = [...local, ...listed];
 
-    if (!getEnv().bggToken) return c.json({ results, bgg: "off", catalogue: hasCatalogue });
+    if (!getEnv().bggToken) return c.json({ results: withImages(results), bgg: "off", catalogue: hasCatalogue });
     try {
       const remote = (await searchGames(q))
         .filter((r) => !seen.has(r.bggId))
         .slice(0, 25)
         .map((r) => ({ ...r, kind: null, onShelf: owned.has(r.bggId), source: "bgg" as const }));
-      return c.json({ results: [...results, ...remote], bgg: "ok", catalogue: hasCatalogue });
+      return c.json({ results: withImages([...results, ...remote]), bgg: "ok", catalogue: hasCatalogue });
     } catch (error) {
-      return c.json({ results, bgg: "error", message: bggErrorResponse(error).error.message, catalogue: hasCatalogue });
+      return c.json({ results: withImages(results), bgg: "error", message: bggErrorResponse(error).error.message, catalogue: hasCatalogue });
     }
+  });
+
+  // Box images for search results, by id: ?ids=13,822. At most 20 ids, the most BGG returns
+  // in one request. Cached images come back at once. With a token, the rest are fetched from BGG
+  // in one request and cached. Without one, they stay missing. A null means BGG has no image.
+  app.get("/images", async (c) => {
+    const ids = [
+      ...new Set(
+        (c.req.query("ids") ?? "")
+          .split(",")
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ].slice(0, THING_BATCH);
+    const missing = ids.filter((id) => !(id in cachedImages(db, ids)));
+    if (missing.length > 0 && getEnv().bggToken) {
+      try {
+        await fetchSearchImages(db, missing);
+      } catch (error) {
+        // Images are decoration. Answer with what we have rather than fail.
+        if (!(error instanceof BggError)) throw error;
+      }
+    }
+    return c.json({ images: cachedImages(db, ids) });
   });
 
   return app;

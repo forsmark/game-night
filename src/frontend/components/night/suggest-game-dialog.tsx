@@ -81,7 +81,8 @@ export function SuggestGameDialog({ eventId, nominated }: { eventId: string; nom
           <DialogTitle className="font-display text-2xl font-normal">Suggest a game</DialogTitle>
           <DialogDescription>Pick one from the shelf, or find a game you can bring. It counts as your vote.</DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="shelf">
+        {/* min-w-0: the dialog is a grid, and long BGG names would otherwise widen it past the screen. */}
+        <Tabs defaultValue="shelf" className="min-w-0">
           <TabsList className="w-full">
             <TabsTrigger value="shelf">From the shelf</TabsTrigger>
             <TabsTrigger value="bring">I'll bring one</TabsTrigger>

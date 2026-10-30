@@ -1,6 +1,6 @@
-import { and, eq, gt, isNull, notInArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, notInArray } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { games, shelf } from "../db/schema";
+import { gameImages, games, shelf } from "../db/schema";
 import { getEnv } from "../env";
 import { BggError, fetchThings, THING_BATCH } from "./client";
 import { fetchGeekdoImage } from "./geekdo";
@@ -79,4 +79,40 @@ export function startImageFill(db: AppDb) {
 // For tests: resolves when the current run is done.
 export function imageFillDone() {
   return running ?? Promise.resolve();
+}
+
+// Images for search results: from games the app knows, then the cache. Ids with no entry here
+// haven't been asked about yet.
+export function cachedImages(db: AppDb, bggIds: number[]) {
+  const images: Record<number, string | null> = {};
+  if (bggIds.length === 0) return images;
+  for (const row of db.select({ bggId: gameImages.bggId, url: gameImages.url }).from(gameImages).where(inArray(gameImages.bggId, bggIds)).all()) {
+    images[row.bggId] = row.url;
+  }
+  for (const row of db.select({ bggId: games.bggId, thumbnail: games.thumbnail }).from(games).where(inArray(games.bggId, bggIds)).all()) {
+    if (row.thumbnail) images[row.bggId] = row.thumbnail;
+  }
+  return images;
+}
+
+// One search-image request to BGG at a time, so fast typing doesn't send a burst.
+let searchQueue: Promise<unknown> = Promise.resolve();
+
+// Asks BGG for the images of up to THING_BATCH games in one request and caches every answer,
+// including "no image", so each game is asked about once. Needs the token.
+export function fetchSearchImages(db: AppDb, bggIds: number[]) {
+  const ids = bggIds.filter((id) => id > 0).slice(0, THING_BATCH);
+  const job = searchQueue.then(async () => {
+    // Another request may have fetched some of these while this one waited.
+    const missingIds = ids.filter((id) => !(id in cachedImages(db, [id])));
+    if (missingIds.length === 0) return;
+    const found = new Map((await fetchThings(missingIds, { stats: false })).map((g) => [g.bggId, g.thumbnail]));
+    const now = new Date().toISOString();
+    for (const bggId of missingIds) {
+      const url = found.get(bggId) ?? null;
+      db.insert(gameImages).values({ bggId, url, fetchedAt: now }).onConflictDoUpdate({ target: gameImages.bggId, set: { url, fetchedAt: now } }).run();
+    }
+  });
+  searchQueue = job.catch(() => {});
+  return job;
 }
