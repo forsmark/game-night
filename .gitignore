@@ -10,3 +10,5 @@ data/
 collection.csv
 dist-server/
 boardgames_ranks*
+.env.*
+!.env.example
