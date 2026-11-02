@@ -60,7 +60,7 @@ async function copyLink(member: Pick<Member, "name" | "link">) {
 // collapse. Left-align the value and give it a line of height so they line up with the other fields.
 const IOS_DATE = "appearance-none text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-date-and-time-value]:text-left";
 
-const EMPTY_NIGHT: EventInput = { startsAt: "", location: "", note: "", splitAt: 7 };
+const EMPTY_NIGHT: EventInput = { startsAt: "", location: "", note: "" };
 
 function NightForm({ editing, onDone }: { editing: (EventInput & { id: string }) | null; onDone: () => void }) {
   const events = useEvents();
@@ -73,14 +73,13 @@ function NightForm({ editing, onDone }: { editing: (EventInput & { id: string })
   const [time, setTime] = useState(initial.startsAt.split("T")[1] ?? last?.startsAt.split("T")[1] ?? "18:30");
   const [location, setLocation] = useState(initial.location);
   const [note, setNote] = useState(initial.note);
-  const [splitAt, setSplitAt] = useState(initial.splitAt);
 
   return (
     <form
       className="paper grid gap-4 p-4 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const input = { startsAt: `${date}T${time}`, location, note, splitAt };
+        const input = { startsAt: `${date}T${time}`, location, note };
         if (editing) {
           update.mutate({ id: editing.id, ...input }, { onSuccess: () => (toast.success("Changes saved"), onDone()) });
         } else {
@@ -105,22 +104,7 @@ function NightForm({ editing, onDone }: { editing: (EventInput & { id: string })
         <Label htmlFor="night-note">Note to everyone</Label>
         <Textarea id="night-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Food, door code, what to bring" />
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor="night-split">Two tables from</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="night-split"
-            type="number"
-            min={4}
-            max={20}
-            value={splitAt}
-            onChange={(e) => setSplitAt(Number(e.target.value))}
-            className="w-20 font-data"
-          />
-          <span className="text-sm text-muted-foreground">players</span>
-        </div>
-      </div>
-      <div className="flex items-end justify-end gap-2">
+      <div className="flex items-end justify-end gap-2 sm:col-span-2">
         {editing && (
           <Button type="button" variant="ghost" onClick={onDone}>
             Cancel

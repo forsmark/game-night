@@ -4,12 +4,17 @@ import type { MeepleColor } from "../../../shared/meeples";
 import type { Game } from "./games";
 
 export type RsvpStatus = "yes" | "maybe" | "no";
-export type GameNight = { id: string; startsAt: string; location: string; note: string; splitAt: number };
+export type GameNight = { id: string; startsAt: string; location: string; note: string };
 export type EventMember = { id: string; name: string; color: MeepleColor };
 export type Nomination = { game: Game; nominatedBy: string; broughtBy: string | null; voters: string[] };
 export type PlanTable = { bggId: number; players: string[]; happy: number };
 export type PlanOption = { tables: PlanTable[]; happy: number; score: number };
-export type Plan = { recommended: "one" | "two" | "none"; oneTable: PlanOption[]; twoTables: PlanOption[] };
+export type Plan = {
+  recommended: "one" | "two" | "three" | "none";
+  oneTable: PlanOption[];
+  twoTables: PlanOption[];
+  threeTables: PlanOption[];
+};
 export type EventDetail = {
   event: GameNight;
   members: EventMember[];

@@ -13,7 +13,6 @@ const eventBody = z.object({
   startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
   location: z.string().trim().max(120).default(""),
   note: z.string().trim().max(1000).default(""),
-  splitAt: z.number().int().min(4).max(20).default(7),
 });
 const rsvpBody = z.object({ status: z.enum(["yes", "maybe", "no"]) });
 const nominateBody = z.object({ bggId: z.number().int().refine((id) => id !== 0), bringing: z.boolean() });
@@ -77,6 +76,12 @@ export function nextEvent(db: AppDb) {
   return db.select().from(events).where(gte(events.startsAt, today())).orderBy(asc(events.startsAt)).get();
 }
 
+// A game's typical play time: the middle of its range, or whichever end is known.
+function playTime(min: number | null, max: number | null) {
+  const known = [min, max].filter((t): t is number => t !== null && t > 0);
+  return known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
+}
+
 function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
   const event = db.select().from(events).where(eq(events.id, eventId)).get();
   if (!event) return null;
@@ -135,9 +140,16 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
     plan: plan({
       attendees: attending.map((r) => r.memberId),
       // An owned expansion can add seats, for example a 5-6 player extension.
-      games: nominated.map((n) => ({ ...n.game, maxPlayers: n.game.maxWithExpansions })),
+      games: nominated.map(({ game }) => ({
+        bggId: game.bggId,
+        minPlayers: game.minPlayers,
+        maxPlayers: game.maxWithExpansions,
+        bestWith: game.bestWith,
+        // BGG gives 0 for a game nobody has rated.
+        weight: game.weight ? game.weight : null,
+        time: playTime(game.minTime, game.maxTime),
+      })),
       approvals,
-      splitAt: event.splitAt,
     }),
   };
 }

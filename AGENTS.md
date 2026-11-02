@@ -2,7 +2,7 @@
 
 Instructions for AI agents that work on this codebase or use the running app.
 
-Game Night is a web app for a monthly board game night. Friends join through a group link, answer if they are coming, suggest games, and vote. A planner proposes one or two tables. The README covers features, setup and deployment.
+Game Night is a web app for a monthly board game night. Friends join through a group link, answer if they are coming, suggest games, and vote. A planner proposes one, two or three tables. The README covers features, setup and deployment.
 
 ## Part 1: Working on the code
 
@@ -93,7 +93,7 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 | `GET /api/events/next` | all | `{"id"}` of the next night, or `{"id": null}` |
 | `GET /api/events` | all | All nights, newest first, with a `going` count |
 | `GET /api/events/:id?maybes=1` | all | Full detail: the night, its `members`, answers, suggested games with voters, and the table `plan`. `members` holds only the night's players, the people who answered it (yes, maybe or no). `maybes=1` counts "maybe" as coming |
-| `POST /api/events` | host | Plan a night: `{"startsAt": "2026-11-13T18:30", "location", "note", "splitAt": 7}` |
+| `POST /api/events` | host | Plan a night: `{"startsAt": "2026-11-13T18:30", "location", "note"}` |
 | `PATCH /api/events/:id` | host | Change any of those fields |
 | `DELETE /api/events/:id` | host | Delete a night |
 | `PUT /api/events/:id/rsvp` | all | `{"status": "yes" \| "maybe" \| "no"}` for the signed-in person. A new yes or maybe on a night whose yes and maybe answers have reached the limit gets 403 `NIGHT_FULL`. Answering no, switching between yes and maybe, and the host are never refused |
@@ -138,7 +138,7 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 
 ### Reading the plan
 
-`plan.recommended` is `"one"`, `"two"` or `"none"`. `plan.oneTable` and `plan.twoTables` each hold up to three options, best first. Each option has `tables`, where each table has a `bggId` and `players` (member ids), and `happy`, the number of people seated at a game they voted for. Map ids to names with `members` and `nominations[].game` from the same response.
+`plan.recommended` is `"one"`, `"two"`, `"three"` or `"none"`. `plan.oneTable`, `plan.twoTables` and `plan.threeTables` each hold up to three options, best first, and later options reuse as few of the earlier options' games as they can. Each option has `tables`, where each table has a `bggId` and `players` (member ids), and `happy`, the number of people seated at a game they voted for. Options are ranked by `happy` first. Best player count, how close each game is to the weight and play time of the games its players voted for, similar play times across tables, and even table sizes only break ties. An extra table is recommended when it makes at least one more person happy per four voters (rounded up). People who haven't voted don't count towards that, and fill the seats left. Map ids to names with `members` and `nominations[].game` from the same response.
 
 ### Common tasks
 

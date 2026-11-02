@@ -10,7 +10,11 @@ import { cn } from "@/lib/utils";
 import { formatPlayersWithExpansions, formatTime } from "@/lib/format";
 import type { EventDetail, EventMember, Nomination, PlanTable } from "@/lib/queries/events";
 
-type Layout = "one" | "two";
+type Layout = "one" | "two" | "three";
+
+const LAYOUT_LABELS: Record<Layout, string> = { one: "One table", two: "Two tables", three: "Three tables" };
+// Table sizes for one, two and three tables. Three tables of 156 fit side by side in the page.
+const TABLE_SIZES = [236, 200, 156];
 
 function Seat({
   member,
@@ -200,8 +204,9 @@ export function TablePlanner({
   const available: Layout[] = [];
   if (plan.oneTable.length) available.push("one");
   if (plan.twoTables.length) available.push("two");
+  if (plan.threeTables.length) available.push("three");
   const layout = chosenLayout && available.includes(chosenLayout) ? chosenLayout : recommended;
-  const options = layout === "two" ? plan.twoTables : plan.oneTable;
+  const options = layout === "three" ? plan.threeTables : layout === "two" ? plan.twoTables : plan.oneTable;
   const optionIndex = chosenPlan?.layout === layout ? Math.min(chosenPlan.index, options.length - 1) : 0;
   const option = options[optionIndex];
 
@@ -239,7 +244,7 @@ export function TablePlanner({
                 value,
                 label: (
                   <>
-                    {value === "one" ? "One table" : "Two tables"}
+                    {LAYOUT_LABELS[value]}
                     {value === recommended && <Star aria-label="recommended" className="size-3 fill-current" />}
                   </>
                 ),
@@ -259,7 +264,7 @@ export function TablePlanner({
 
       {option ? (
         <LayoutGroup id="tables">
-          <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:items-start sm:gap-6">
+          <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-6">
             <AnimatePresence mode="popLayout" initial={false}>
               {option.tables.map((table, i) => {
                 const nomination = nominations.get(table.bggId);
@@ -270,7 +275,7 @@ export function TablePlanner({
                     table={table}
                     nomination={nomination}
                     members={members}
-                    size={option.tables.length > 1 ? 200 : 236}
+                    size={TABLE_SIZES[option.tables.length - 1]}
                   />
                 );
               })}

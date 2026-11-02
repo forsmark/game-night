@@ -59,7 +59,7 @@ const date = new Date();
 date.setDate(date.getDate() + ((5 - date.getDay() + 7) % 7 || 7) + 7);
 const eventId = randomUUID();
 db.insert(events)
-  .values({ id: eventId, startsAt: `${date.toLocaleDateString("sv-SE")}T18:30`, location: "Marc's place, Nørrebro", note: "Pizza from 18:30. First game at 19:00.", splitAt: 7, createdAt: now })
+  .values({ id: eventId, startsAt: `${date.toLocaleDateString("sv-SE")}T18:30`, location: "Marc's place, Nørrebro", note: "Pizza from 18:30. First game at 19:00.", createdAt: now })
   .run();
 
 const answers: [string, "yes" | "maybe" | "no"][] = [

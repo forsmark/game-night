@@ -1,6 +1,6 @@
 # Game Night
 
-A small web app for a monthly board game night. Friends join from one group link, say if they are coming, suggest games, and vote on what to play. The app proposes one or two tables and shows who sits where.
+A small web app for a monthly board game night. Friends join from one group link, say if they are coming, suggest games, and vote on what to play. The app proposes one, two or three tables and shows who sits where.
 
 ## What it does
 
@@ -9,7 +9,7 @@ A small web app for a monthly board game night. Friends join from one group link
 - **Personal links.** Every player also has a personal link that signs them in on another device. They copy it from the menu under their meeple. Nobody has a password.
 - **Codes.** Links don't open inside an iPhone home-screen app, so the welcome page has a code box. The group code (on the Host page, next to the group link) leads to the join form. "Sign in on another device" in the menu shows a one-time code that works once, for 10 minutes. The host can make one for any player.
 - **Vote.** Each player marks every suggested game they would play (approval voting).
-- **Tables.** The planner picks the games that make the most attendees happy and respects each game's player count. From the "two tables" size (default 7) it splits the group.
+- **Tables.** The planner picks the games that make the most attendees happy and respects each game's player count. It splits the group into two or three tables when that seats clearly more people at a game they voted for. Ties go to the plan that fits each player's taste (weight and play time of the games they voted for) and keeps the tables finishing at about the same time.
 - **Shelf.** The host's collection, imported from a BGG CSV export. Expansions are listed with their base game. Only base games can be suggested. An owned expansion that adds seats, such as a 5-6 player extension, raises the game's player count in the planner.
 - **Complexity.** Every game card shows its BGG weight as a 5-step meter, so new players can find a light game.
 - **Bring a game.** Players type in a game they bring. With a BGG token, they can search BGG instead.
