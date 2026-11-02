@@ -21,6 +21,8 @@ pnpm seed:demo      # fake players and a planned night, empty database only
 
 A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. If you change dependencies, the build, or the server entry points, also build the container: `podman build -t game-night .`. For UI changes, also open the page and look at it, in light and dark mode and at phone width (390px).
 
+Finish by cleaning up: stop every dev server and watcher you started, and delete the scratch files you made in `/tmp` (demo databases, logs, cookie jars). Check the ports afterwards (`ss -ltn`). Killing `npx` or `tsx` can leave its `node` child holding the port.
+
 ### Layout
 
 | Path | What it holds |
