@@ -5,10 +5,14 @@ data/
 *.db
 *.db-shm
 *.db-wal
-.claude/
+.claude/*
+!.claude/skills/
 .DS_Store
 collection.csv
 dist-server/
 boardgames_ranks*
 .env.*
 !.env.example
+/coverage/
+.turbo/
+*.log

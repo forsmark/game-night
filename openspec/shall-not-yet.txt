@@ -1,0 +1,3 @@
+# The requirements with more SHALL sentences than scenarios, one per line:
+# <capability> › <requirement> › <how many more>
+# The list only shrinks. `spec-checks shall --write` rewrites it as today's gaps.

@@ -1,0 +1,6 @@
+# The pairs of requirements a spec sweep reported as disagreeing and a person
+# judged not to, one per line:
+# <capability> › <requirement> ⇄ <capability> › <requirement> › <why> › <date>
+# A side that is not a requirement says what it is instead, as a scenario title
+# or a file of code. A sweep skips a listed pair unless either requirement
+# changed after the pair was listed: `spec-checks sweep-dismissed` lists those.

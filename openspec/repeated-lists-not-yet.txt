@@ -1,0 +1,3 @@
+# The lists that two specs both hold, one copy per line:
+# <capability> › <requirement> ⇄ <capability> › <requirement> › <items shared>
+# The list only shrinks. `spec-checks repeated --write` rewrites it as today's copies.

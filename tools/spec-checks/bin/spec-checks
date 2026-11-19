@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+// The spec-checks command. `spec-checks --help` lists its commands.
+import { main } from '../lib/cli.mjs';
+
+process.exitCode = main(process.argv.slice(2));

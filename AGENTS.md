@@ -23,6 +23,14 @@ A change is done when `pnpm test`, `pnpm typecheck` and `pnpm build` all pass. I
 
 Finish by cleaning up: stop every dev server and watcher you started, and delete the scratch files you made in `/tmp` (demo databases, logs, cookie jars). Check the ports afterwards (`ss -ltn`). Killing `npx` or `tsx` can leave its `node` child holding the port.
 
+Checks and locks:
+
+- `node tools/spec-checks/bin/spec-checks verify` runs the spec checks. Run it before you archive a change, and after a merge that touched `openspec/`.
+- `node scripts/verify.mjs --affected` runs the checks and the tests that the changes since origin/main can reach. `node scripts/verify.mjs` runs everything. Neither works yet: CONFIG in `scripts/verify.mjs` is still empty.
+- Heavy jobs wait for one machine-wide lock. Start other heavy commands with `node scripts/heavy-lock.mjs <command>`.
+
+The first OpenSpec change wires the pnpm commands above into CONFIG in `scripts/verify.mjs` and the layout into `scripts/verify/affected.mjs`, adds Vitest to `coverage.adapters` in `openspec/checks.json`, and updates this list.
+
 ### Layout
 
 | Path | What it holds |
@@ -43,6 +51,10 @@ Finish by cleaning up: stop every dev server and watcher you started, and delete
 | `src/shared/` | Code both sides import, such as meeple colours |
 | `scripts/make-icon.mjs` | Draws `public/icon.png` (512x512). Run with `pnpm icon` |
 | `tests/` | Tests. API tests run the real app on an in-memory database. `tests/setup.ts` blocks `fetch`, so no test reaches BGG. Stub it with fixtures where a test needs BGG |
+| `openspec/` | Specs, changes, `config.yaml`, and the spec checks' `checks.json` and baselines |
+| `GLOSSARY.md` | The domain words |
+| `scripts/verify.mjs`, `scripts/verify/` | Affected tests: runs the checks and tests a change can reach |
+| `tools/spec-checks/` | The vendored spec-checks CLI. Update it with `spec-checks vendor`, don't edit it |
 
 ### Rules
 
@@ -58,6 +70,20 @@ Finish by cleaning up: stop every dev server and watcher you started, and delete
 - **Request hygiene:** never add a request logger or log a request path. `/j/<token>` and `/i/<token>` carry tokens. Codes are secrets too: only in POST bodies, never logged, sign-in codes stored as SHA-256 hashes. Every response gets `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff` from the middleware in `app.ts`. `tests/hosting.test.ts` checks both.
 - **Links:** build group and personal links on the server with `shareLink` in `auth/sessions.ts`, never in the frontend. It uses `SHARE_BASE_URL` when set, otherwise `BASE_URL`.
 - **UI text:** plain and specific, in sentence case. A button names its action ("Plan night", "Copy link"). Errors say what went wrong and how to fix it. No emoji.
+
+### A change to behavior goes through OpenSpec
+
+The specs in `openspec/specs/` say what the system does. A change to what a spec says, or new behavior no spec describes, goes through an OpenSpec change: propose, apply, archive. Load the skill `spec-checks:practice` before each step.
+
+- The owner answers both gates: the proposal gate after propose, and the sync question before archive.
+- The base branch is `main`. One change goes in one pull request, from proposal to archive.
+- A fix that makes the code do what a spec already says needs no change.
+
+### Words
+
+`GLOSSARY.md` holds the domain words, and they are binding. Use its term, never a synonym. A change that brings a new concept adds its term to the glossary in the same change.
+
+Write specs, docs and commit messages in plain English: one idea per sentence, active voice, one name per thing.
 
 ## Part 2: Using the running app
 

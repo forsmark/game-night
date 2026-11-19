@@ -1,0 +1,3 @@
+# The requirements whose text above the first scenario is over OpenSpec's limit
+# of 500 characters, one per line: <capability> › <requirement>
+# The list only shrinks. `spec-checks validate --write` rewrites it as today's.

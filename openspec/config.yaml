@@ -1,0 +1,39 @@
+schema: spec-driven
+skillsScope: project
+
+context: |
+  Game Night is a web app for a monthly board game night. Friends join through a group link, answer if they are coming, suggest games, and vote. A planner proposes one, two or three tables.
+  Stack: TypeScript, Node 22, Hono, SQLite with Drizzle, React with Vite, TanStack Router and Query, Tailwind, Vitest, pnpm.
+  Domain words live in GLOSSARY.md at the repo root and are binding. Use those terms in code, specs and change names.
+  This repo follows the spec-checks practice: load the skill spec-checks:practice before you propose, apply or archive a change.
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

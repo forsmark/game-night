@@ -1,0 +1,5 @@
+# The scenarios that have no entry in the coverage map yet, one key per line:
+# <capability> › <requirement> › <scenario>
+# The list only shrinks. A scenario added after the checks were adopted needs an
+# entry: a test, or a reason it has none. `spec-checks coverage --write` rewrites
+# the list without the scenarios now mapped.
