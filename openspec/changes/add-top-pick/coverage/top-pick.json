@@ -1,0 +1,32 @@
+{
+  "A member can make a suggestion their top pick": {
+    "A member picks a suggestion": { "unit": "tests/top-pick.test.ts › A member picks a suggestion" },
+    "A member who hasn't answered": { "unit": "tests/top-pick.test.ts › A member who hasn't answered" },
+    "A game that isn't suggested": { "unit": "tests/top-pick.test.ts › A game that isn't suggested" }
+  },
+  "A top pick is also a vote": {
+    "Top pick without an earlier vote": { "unit": "tests/top-pick.test.ts › Top pick without an earlier vote" }
+  },
+  "One top pick per member per night": {
+    "Picking another game moves the top pick": { "unit": "tests/top-pick.test.ts › Picking another game moves the top pick" },
+    "Top picks on different nights": { "unit": "tests/top-pick.test.ts › Top picks on different nights" }
+  },
+  "Withdrawing the vote clears the top pick": {
+    "The member withdraws the vote": { "unit": "tests/top-pick.test.ts › The member withdraws the vote" },
+    "The game is taken off the vote": { "unit": "tests/top-pick.test.ts › The game is taken off the vote" }
+  },
+  "Clearing a top pick keeps the vote": {
+    "The member clears the top pick": { "unit": "tests/top-pick.test.ts › The member clears the top pick" }
+  },
+  "Top picks count only from the night's players": {
+    "A top pick from someone who is not a night's player": { "unit": "tests/top-pick.test.ts › A top pick from someone who is not a night's player" }
+  },
+  "The viewer's own top pick is drawn with stars": {
+    "The viewer has a top pick": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome at 390px and 1024px, light and dark, on 2026-11-19: only the viewer's top pick card draws the stars, and they follow the top pick when it moves." },
+    "Another member's top pick": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome on 2026-11-19: cards that are only other members' top picks draw no stars." }
+  },
+  "A star marks each top picker's meeple": {
+    "Meeples on a vote card": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome on 2026-11-19: only top pickers' meeples on a vote card carry the star." },
+    "Meeples in the table plan": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome on 2026-11-19: only players seated at their top pick carry the star in the table plan." }
+  }
+}

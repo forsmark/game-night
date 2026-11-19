@@ -11,6 +11,7 @@ import {
   useEvent,
   useRemoveNomination,
   useRsvp,
+  useTopPick,
   useVote,
   type EventDetail,
   type EventMember,
@@ -99,6 +100,7 @@ export function NightView({ eventId }: { eventId: string }) {
   const [includeMaybes, setIncludeMaybes] = useState(false);
   const { data: detail } = useEvent(eventId, includeMaybes);
   const vote = useVote(eventId, member!.id);
+  const topPick = useTopPick(eventId, member!.id);
   const removeNomination = useRemoveNomination(eventId);
 
   const members = useMemo(() => new Map((detail?.members ?? []).map((m) => [m.id, m])), [detail?.members]);
@@ -172,6 +174,7 @@ export function NightView({ eventId }: { eventId: string }) {
                   canVote={Boolean(myRsvp)}
                   canRemove={member.role === "host" || nomination.nominatedBy === member.id}
                   onVote={(approve) => vote.mutate({ bggId: nomination.game.bggId, approve })}
+                  onTopPick={(pick) => topPick.mutate(pick ? nomination.game.bggId : null)}
                   onRemove={() => removeNomination.mutate(nomination.game.bggId)}
                 />
               ))}

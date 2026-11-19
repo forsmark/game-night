@@ -6,9 +6,10 @@ import type { Game } from "./games";
 export type RsvpStatus = "yes" | "maybe" | "no";
 export type GameNight = { id: string; startsAt: string; location: string; note: string };
 export type EventMember = { id: string; name: string; color: MeepleColor };
-export type Nomination = { game: Game; nominatedBy: string; broughtBy: string | null; voters: string[] };
-export type PlanTable = { bggId: number; players: string[]; happy: number };
-export type PlanOption = { tables: PlanTable[]; happy: number; score: number };
+// `topPickers` are the voters who made this game their top pick for the night.
+export type Nomination = { game: Game; nominatedBy: string; broughtBy: string | null; voters: string[]; topPickers: string[] };
+export type PlanTable = { bggId: number; players: string[]; happy: number; topPicks: number };
+export type PlanOption = { tables: PlanTable[]; happy: number; topPicks: number; score: number };
 export type Plan = {
   recommended: "one" | "two" | "three" | "none";
   oneTable: PlanOption[];
@@ -80,8 +81,35 @@ export function useVote(id: string, memberId: string) {
           nominations: detail.nominations.map((n) =>
             n.game.bggId !== bggId
               ? n
-              : { ...n, voters: approve ? [...n.voters, memberId] : n.voters.filter((v) => v !== memberId) },
+              : approve
+                ? { ...n, voters: [...n.voters, memberId] }
+                : // Withdrawing the vote clears a top pick on the game too.
+                  { ...n, voters: n.voters.filter((v) => v !== memberId), topPickers: n.topPickers.filter((v) => v !== memberId) },
           ),
+        },
+      );
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: eventKey(id) }),
+  });
+}
+
+// Make a game your top pick, or clear it with null. A top pick is also a vote, and a member
+// has one per night, so picking a game moves the star off any other game.
+export function useTopPick(id: string, memberId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bggId: number | null) => apiClient.put(`/events/${id}/top-pick`, { bggId }),
+    onMutate: async (bggId) => {
+      await queryClient.cancelQueries({ queryKey: eventKey(id) });
+      queryClient.setQueriesData<EventDetail>({ queryKey: eventKey(id) }, (detail) =>
+        detail && {
+          ...detail,
+          nominations: detail.nominations.map((n) => {
+            const topPickers = n.topPickers.filter((v) => v !== memberId);
+            if (n.game.bggId !== bggId) return { ...n, topPickers };
+            const voters = n.voters.includes(memberId) ? n.voters : [...n.voters, memberId];
+            return { ...n, voters, topPickers: [...topPickers, memberId] };
+          }),
         },
       );
     },

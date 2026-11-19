@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { Check, ExternalLink, X } from "lucide-react";
+import { Check, ExternalLink, Star, X } from "lucide-react";
 import { Meeple } from "@/components/pieces/meeple";
 import { GameTile } from "@/components/game-tile";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { bggUrl, expansionName, formatBestWith, formatPlayersWithExpansions, formatTime } from "@/lib/format";
 import { Complexity } from "@/components/complexity";
 import type { EventMember, Nomination } from "@/lib/queries/events";
+import { MeepleStar, TopPickStars } from "./top-pick-stars";
 
 export function GameCard({
   nomination,
@@ -17,6 +18,7 @@ export function GameCard({
   canVote,
   canRemove,
   onVote,
+  onTopPick,
   onRemove,
 }: {
   nomination: Nomination;
@@ -27,10 +29,13 @@ export function GameCard({
   canVote: boolean;
   canRemove: boolean;
   onVote: (approve: boolean) => void;
+  // True makes this game the viewer's top pick, false clears it.
+  onTopPick: (pick: boolean) => void;
   onRemove: () => void;
 }) {
-  const { game, voters, broughtBy } = nomination;
+  const { game, voters, topPickers, broughtBy } = nomination;
   const voted = voters.includes(myId);
+  const myTopPick = topPickers.includes(myId);
   const otherVotes = voters.filter((id) => id !== myId).length;
   // Taking a game off drops its votes too, so ask first when other people voted for it.
   const [armed, setArmed] = useState(false);
@@ -46,10 +51,11 @@ export function GameCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0 }}
       className={cn(
-        "paper flex gap-3 p-3 sm:gap-4 sm:p-4",
+        "paper relative flex gap-3 p-3 sm:gap-4 sm:p-4",
         voted && "[--paper-bg:color-mix(in_oklab,var(--vote)_16%,var(--card))]",
       )}
     >
+      {myTopPick && <TopPickStars />}
       <GameTile game={game} size={72} />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start justify-between gap-2">
@@ -100,6 +106,7 @@ export function GameCard({
           ) : (
             <span className="paper-chip">From the shelf</span>
           )}
+          {myTopPick && <span className="paper-chip border-vote font-semibold text-vote">Your top pick</span>}
           {best && <span className="paper-chip">{best}</span>}
           {fitsEveryone && (
             <span className="paper-chip border-primary bg-card font-semibold text-primary">Seats all {attending}</span>
@@ -120,29 +127,50 @@ export function GameCard({
                       exit={{ y: -16, rotate: 30, opacity: 0 }}
                       transition={{ type: "spring", stiffness: 420, damping: 14 }}
                     >
-                      <Meeple color={member.color} size={18} title={member.name} />
+                      <span className="relative block">
+                        <Meeple
+                          color={member.color}
+                          size={18}
+                          title={topPickers.includes(id) ? `${member.name}, top pick` : member.name}
+                        />
+                        {topPickers.includes(id) && <MeepleStar />}
+                      </span>
                     </motion.span>
                   ) : null;
                 })}
               </AnimatePresence>
             </div>
           </div>
-          <Button
-            size="sm"
-            variant={voted ? "default" : "outline"}
-            aria-pressed={voted}
-            onClick={() => onVote(!voted)}
-            disabled={!canVote}
-            className={cn("min-w-28 rounded-full", voted && "bg-vote text-vote-foreground hover:bg-vote/85")}
-          >
-            {voted ? (
-              <>
-                <Check /> I'd play this
-              </>
-            ) : (
-              "I'd play this"
-            )}
-          </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-pressed={myTopPick}
+              aria-label={myTopPick ? `Clear ${game.name} as your top pick` : `Make ${game.name} your top pick`}
+              title={myTopPick ? "Clear top pick. Your vote stays." : "Make this your top pick: the one game you most want to play"}
+              onClick={() => onTopPick(!myTopPick)}
+              disabled={!canVote}
+              className={cn("rounded-full", myTopPick && "border-vote text-vote hover:text-vote")}
+            >
+              <Star className={cn(myTopPick && "fill-current")} />
+            </Button>
+            <Button
+              size="sm"
+              variant={voted ? "default" : "outline"}
+              aria-pressed={voted}
+              onClick={() => onVote(!voted)}
+              disabled={!canVote}
+              className={cn("min-w-28 rounded-full", voted && "bg-vote text-vote-foreground hover:bg-vote/85")}
+            >
+              {voted ? (
+                <>
+                  <Check /> I'd play this
+                </>
+              ) : (
+                "I'd play this"
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </motion.li>

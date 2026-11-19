@@ -1,0 +1,23 @@
+{
+  "Top picks rank options first": {
+    "More top picks beat more happy players": { "unit": "tests/plan.test.ts › More top picks beat more happy players" }
+  },
+  "Happy players decide between equal top picks": {
+    "Same top picks, different happy players": { "unit": "tests/plan.test.ts › Same top picks, different happy players" },
+    "Nobody has a top pick": { "unit": "tests/plan.test.ts › Nobody has a top pick" }
+  },
+  "Seating puts players at their top pick first": {
+    "Two players want the same seat": { "unit": "tests/plan.test.ts › Two players want the same seat" }
+  },
+  "The plan reports top picks": {
+    "A table with one top pick": { "unit": "tests/plan.test.ts › A table with one top pick" }
+  },
+  "The plan summary names the top picks": {
+    "Players with top picks": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome on 2026-11-19: the summary read \"7 of 7 sit at a game they voted for. 4 sit at their top pick.\"" },
+    "Nobody has a top pick": { "none": "The project has no browser test runner yet. Checked by hand in headless Chrome on 2026-11-19: with every top pick cleared, the summary read \"7 of 7 sit at a game they voted for.\" and nothing more." }
+  },
+  "Top picks do not change the table count": {
+    "More top picks at more tables, too few extra happy players": { "unit": "tests/plan.test.ts › More top picks at more tables, too few extra happy players" },
+    "Enough extra happy players": { "unit": "tests/plan.test.ts › Enough extra happy players" }
+  }
+}

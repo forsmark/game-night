@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatPlayersWithExpansions, formatTime } from "@/lib/format";
 import type { EventDetail, EventMember, Nomination, PlanTable } from "@/lib/queries/events";
+import { MeepleStar } from "./top-pick-stars";
 
 type Layout = "one" | "two" | "three";
 
@@ -21,11 +22,14 @@ function Seat({
   x,
   y,
   voted,
+  topPick,
 }: {
   member: EventMember;
   x: number;
   y: number;
   voted: boolean;
+  // Seated at the game they most want to play.
+  topPick: boolean;
 }) {
   // Each meeple fidgets on its own schedule, so the table never moves in sync.
   const idle = useMemo(() => ({ delay: Math.random() * 5, repeatDelay: 4 + Math.random() * 7 }), []);
@@ -42,12 +46,21 @@ function Seat({
         transition={{ duration: 0.8, repeat: Infinity, ...idle }}
         whileHover={{ y: -14, rotate: 20, scale: 1.15, transition: { type: "spring", stiffness: 500, damping: 10 } }}
       >
-        <Meeple
-          color={member.color}
-          size={30}
-          className={cn(!voted && "opacity-45 saturate-50")}
-          title={voted ? `${member.name} voted for this` : `${member.name} didn't vote for this`}
-        />
+        <span className="relative block">
+          <Meeple
+            color={member.color}
+            size={30}
+            className={cn(!voted && "opacity-45 saturate-50")}
+            title={
+              topPick
+                ? `${member.name}'s top pick`
+                : voted
+                  ? `${member.name} voted for this`
+                  : `${member.name} didn't vote for this`
+            }
+          />
+          {topPick && <MeepleStar size={16} />}
+        </span>
       </motion.div>
       <span
         className={cn(
@@ -78,6 +91,7 @@ function Table({
   const centre = box / 2;
   const radius = size / 2 - 2;
   const voters = new Set(nomination.voters);
+  const topPickers = new Set(nomination.topPickers);
   const { game } = nomination;
   const time = formatTime(game);
 
@@ -107,6 +121,7 @@ function Table({
               key={id}
               member={member}
               voted={voters.has(id)}
+              topPick={topPickers.has(id)}
               x={centre + radius * Math.cos(angle)}
               y={centre + radius * Math.sin(angle)}
             />
@@ -196,6 +211,11 @@ export function TablePlanner({
   );
 
   const maybes = detail.rsvps.filter((r) => r.status === "maybe").length;
+  const coming = new Set(
+    detail.rsvps.filter((r) => r.status === "yes" || (includeMaybes && r.status === "maybe")).map((r) => r.memberId),
+  );
+  // Only say how top picks went when someone coming has one.
+  const anyTopPick = detail.nominations.some((n) => n.topPickers.some((id) => coming.has(id)));
   const attending = detail.rsvps.filter((r) => r.status === "yes" || (includeMaybes && r.status === "maybe")).length;
 
   // Follow the recommendation until the viewer picks a layout, and fall back
@@ -219,7 +239,9 @@ export function TablePlanner({
           </h2>
           <p className="text-sm text-muted-foreground">
             {option
-              ? `${option.happy} of ${attending} sit at a game they voted for.`
+              ? `${option.happy} of ${attending} sit at a game they voted for.${
+                  anyTopPick ? ` ${option.topPicks} ${option.topPicks === 1 ? "sits" : "sit"} at their top pick.` : ""
+                }`
               : `${attending} ${attending === 1 ? "player" : "players"} so far.`}
           </p>
         </div>
@@ -282,7 +304,7 @@ export function TablePlanner({
             </AnimatePresence>
           </div>
           <p className="text-center text-xs text-muted-foreground">
-            Faded meeples sit at a game they didn't vote for. Seats change as people vote.
+            Faded meeples sit at a game they didn't vote for. A star marks someone at their top pick. Seats change as people vote.
           </p>
         </LayoutGroup>
       ) : (
