@@ -120,14 +120,15 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 |-----------------|-----|--------------|
 | `GET /api/events/next` | all | `{"id"}` of the next night, or `{"id": null}` |
 | `GET /api/events` | all | All nights, newest first, with a `going` count |
-| `GET /api/events/:id?maybes=1` | all | Full detail: the night, its `members`, answers, suggested games with voters, and the table `plan`. `members` holds only the night's players, the people who answered it (yes, maybe or no). `maybes=1` counts "maybe" as coming |
+| `GET /api/events/:id?maybes=1` | all | Full detail: the night, its `members`, answers, suggested games with `voters` and `topPickers`, and the table `plan`. `members` holds only the night's players, the people who answered it (yes, maybe or no). `maybes=1` counts "maybe" as coming |
 | `POST /api/events` | host | Plan a night: `{"startsAt": "2026-11-13T18:30", "location", "note"}` |
 | `PATCH /api/events/:id` | host | Change any of those fields |
 | `DELETE /api/events/:id` | host | Delete a night |
 | `PUT /api/events/:id/rsvp` | all | `{"status": "yes" \| "maybe" \| "no"}` for the signed-in person. A new yes or maybe on a night whose yes and maybe answers have reached the limit gets 403 `NIGHT_FULL`. Answering no, switching between yes and maybe, and the host are never refused |
 | `POST /api/events/:id/nominations` | all | Suggest a game: `{"bggId", "bringing": true \| false}`. `bringing: false` only works for shelf games. Expansions are refused. Only after answering this night, otherwise 403 `ANSWER_FIRST` |
 | `DELETE /api/events/:id/nominations/:bggId` | suggester or host | Take a game off the vote |
-| `PUT /api/events/:id/votes/:bggId` | all | `{"approve": true \| false}`. Only after answering this night, otherwise 403 `ANSWER_FIRST` |
+| `PUT /api/events/:id/votes/:bggId` | all | `{"approve": true \| false}`. Only after answering this night, otherwise 403 `ANSWER_FIRST`. Withdrawing the vote for your top pick clears the top pick |
+| `PUT /api/events/:id/top-pick` | all | `{"bggId": <id> \| null}`. Makes a suggested game your top pick for the night, the one game you most want to play, and votes for it. One per member per night: picking another game moves it, and the old game keeps your vote. `null` clears the top pick and keeps the vote. A game that isn't suggested: 400. Only after answering this night, otherwise 403 `ANSWER_FIRST` |
 
 **Games and the shelf**
 
@@ -166,7 +167,7 @@ All `/api` routes except `/api/health`, `/api/join` and `/api/code` need the ses
 
 ### Reading the plan
 
-`plan.recommended` is `"one"`, `"two"`, `"three"` or `"none"`. `plan.oneTable`, `plan.twoTables` and `plan.threeTables` each hold up to three options, best first, and later options reuse as few of the earlier options' games as they can. Each option has `tables`, where each table has a `bggId` and `players` (member ids), and `happy`, the number of people seated at a game they voted for. Options are ranked by `happy` first. Best player count, how close each game is to the weight and play time of the games its players voted for, similar play times across tables, and even table sizes only break ties. An extra table is recommended when it makes at least one more person happy per four voters (rounded up). People who haven't voted don't count towards that, and fill the seats left. Map ids to names with `members` and `nominations[].game` from the same response.
+`plan.recommended` is `"one"`, `"two"`, `"three"` or `"none"`. `plan.oneTable`, `plan.twoTables` and `plan.threeTables` each hold up to three options, best first, and later options reuse as few of the earlier options' games as they can. Each option has `tables`, where each table has a `bggId` and `players` (member ids). Tables and options both have `topPicks`, the number of people seated at their top pick, and `happy`, the number of people seated at a game they voted for. Options are ranked by `topPicks` first, then `happy`. Best player count, how close each game is to the weight and play time of the games its players voted for, similar play times across tables, and even table sizes only break ties. An extra table is recommended when it makes at least one more person happy per four voters (rounded up). Top picks don't count towards that. People who haven't voted don't count towards that, and fill the seats left. Map ids to names with `members` and `nominations[].game` from the same response.
 
 ### Common tasks
 

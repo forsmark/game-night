@@ -17,6 +17,8 @@ const eventBody = z.object({
 const rsvpBody = z.object({ status: z.enum(["yes", "maybe", "no"]) });
 const nominateBody = z.object({ bggId: z.number().int().refine((id) => id !== 0), bringing: z.boolean() });
 const voteBody = z.object({ approve: z.boolean() });
+// A game id sets the top pick, null clears it.
+const topPickBody = z.object({ bggId: z.number().int().refine((id) => id !== 0).nullable() });
 
 const badRequest = (message = "Invalid request body") => ({ error: { code: "BAD_REQUEST", message } });
 const notFound = { error: { code: "NOT_FOUND", message: "No such game night" } };
@@ -111,11 +113,14 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
   const voteRows = db.select().from(votes).where(eq(votes.eventId, eventId)).all();
 
   const approvals = new Map<number, Set<string>>();
+  // Member id -> the game they most want to play tonight.
+  const topPicks = new Map<string, number>();
   for (const v of voteRows) {
     // Votes count only from the night's players. Older data may hold votes from people who never answered.
     if (!onNight.has(v.memberId)) continue;
     if (!approvals.has(v.bggId)) approvals.set(v.bggId, new Set());
     approvals.get(v.bggId)!.add(v.memberId);
+    if (v.topPick) topPicks.set(v.memberId, v.bggId);
   }
 
   const owned = shelfIds(db);
@@ -126,6 +131,7 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
     nominatedBy: nomination.nominatedBy,
     broughtBy: nomination.broughtBy,
     voters: [...(approvals.get(game.bggId) ?? [])],
+    topPickers: [...topPicks].filter(([, bggId]) => bggId === game.bggId).map(([memberId]) => memberId),
   }));
 
   // Seat people in the order they said yes, so early birds keep their seat when the plan shifts.
@@ -150,6 +156,7 @@ function eventDetail(db: AppDb, eventId: string, includeMaybes: boolean) {
         time: playTime(game.minTime, game.maxTime),
       })),
       approvals,
+      topPicks: new Map([...topPicks].filter(([memberId]) => attending.some((r) => r.memberId === memberId))),
     }),
   };
 }
@@ -317,6 +324,39 @@ export function eventsRoutes(db: AppDb) {
         .where(and(eq(votes.eventId, eventId), eq(votes.bggId, bggId), eq(votes.memberId, memberId)))
         .run();
     }
+    return c.json({ ok: true });
+  });
+
+  // The one game a member most wants to play tonight. It lives on their vote for that game, so
+  // picking a game also votes for it, and withdrawing the vote clears the top pick.
+  app.put("/:id/top-pick", async (c) => {
+    const parsed = topPickBody.safeParse(await c.req.json());
+    if (!parsed.success) return c.json(badRequest(), 400);
+    const eventId = c.req.param("id");
+    const memberId = c.get("member").id;
+    const { bggId } = parsed.data;
+    if (bggId !== null) {
+      const nominated = db
+        .select()
+        .from(nominations)
+        .where(and(eq(nominations.eventId, eventId), eq(nominations.bggId, bggId)))
+        .get();
+      if (!nominated) return c.json(badRequest("That game is not on the vote list"), 400);
+    }
+    if (!hasAnswered(db, eventId, memberId)) return c.json(answerFirst("pick a top game"), 403);
+
+    db.transaction((tx) => {
+      tx.update(votes)
+        .set({ topPick: false })
+        .where(and(eq(votes.eventId, eventId), eq(votes.memberId, memberId), eq(votes.topPick, true)))
+        .run();
+      if (bggId !== null) {
+        tx.insert(votes)
+          .values({ eventId, bggId, memberId, topPick: true })
+          .onConflictDoUpdate({ target: [votes.eventId, votes.bggId, votes.memberId], set: { topPick: true } })
+          .run();
+      }
+    });
     return c.json({ ok: true });
   });
 

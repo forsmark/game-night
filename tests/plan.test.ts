@@ -245,3 +245,125 @@ describe("plan", () => {
     expect(performance.now() - started).toBeLessThan(2000);
   });
 });
+
+// A top pick is the one game a member most wants to play. The planner puts as many people at
+// their top pick as it can before anything else, so nobody misses the game they came for when
+// a plan exists that gives it to them.
+const picks = (entries: Record<string, number>) => new Map(Object.entries(entries));
+
+describe("Top picks rank options first", () => {
+  it("More top picks beat more happy players", () => {
+    // Game 1: 4 happy, 2 top picks. Game 2: 5 happy, 1 top pick.
+    const result = plan({
+      attendees: people(5),
+      games: [game(1, 2, 5), game(2, 2, 5)],
+      approvals: votes({ 1: ["p1", "p2", "p3", "p4"], 2: people(5) }),
+      topPicks: picks({ p1: 1, p2: 1, p3: 2 }),
+    });
+
+    expect(result.oneTable[0].tables[0].bggId).toBe(1);
+    expect(result.oneTable[0]).toMatchObject({ topPicks: 2, happy: 4 });
+    expect(result.oneTable[1]).toMatchObject({ topPicks: 1, happy: 5 });
+  });
+});
+
+describe("Happy players decide between equal top picks", () => {
+  it("Same top picks, different happy players", () => {
+    const result = plan({
+      attendees: people(5),
+      games: [game(1, 2, 5), game(2, 2, 5)],
+      approvals: votes({ 1: ["p1", "p2", "p3"], 2: people(5) }),
+      topPicks: picks({ p1: 1, p2: 2 }),
+    });
+
+    expect(result.oneTable[0].tables[0].bggId).toBe(2);
+    expect(result.oneTable[0]).toMatchObject({ topPicks: 1, happy: 5 });
+  });
+
+  it("Nobody has a top pick", () => {
+    const result = plan({
+      attendees: people(5),
+      games: [game(1, 2, 5), game(2, 2, 5)],
+      approvals: votes({ 1: ["p1", "p2", "p3"], 2: people(5) }),
+    });
+
+    expect(result.oneTable[0].tables[0].bggId).toBe(2);
+    expect(result.oneTable[0]).toMatchObject({ topPicks: 0, happy: 5 });
+  });
+});
+
+describe("Seating puts players at their top pick first", () => {
+  it("Two players want the same seat", () => {
+    // Game 1 has two seats, and p1, p2 and p3 all voted for it. Seating by votes alone sends
+    // p1 to game 2, since p1 voted for both. p1's top pick keeps p1 at game 1.
+    const result = plan({
+      attendees: ["p1", "p2", "p3", "p4"],
+      games: [game(1, 2, 2), game(2, 2, 2)],
+      approvals: votes({ 1: ["p1", "p2", "p3"], 2: ["p1", "p2", "p4"] }),
+      topPicks: picks({ p1: 1 }),
+    });
+
+    const tables = result.twoTables[0].tables;
+    expect(tables.find((t) => t.bggId === 1)!.players).toContain("p1");
+    expect(result.twoTables[0].topPicks).toBe(1);
+  });
+});
+
+describe("The plan reports top picks", () => {
+  it("A table with one top pick", () => {
+    const result = plan({
+      attendees: ["p1", "p2", "p3"],
+      games: [game(1, 2, 4)],
+      approvals: votes({ 1: ["p1", "p2", "p3"] }),
+      topPicks: picks({ p2: 1 }),
+    });
+
+    expect(result.oneTable[0].tables[0].topPicks).toBe(1);
+    expect(result.oneTable[0].topPicks).toBe(1);
+  });
+});
+
+describe("Top picks do not change the table count", () => {
+  it("More top picks at more tables, too few extra happy players", () => {
+    // One table of game 1: 7 happy, 4 top picks. Two tables: 8 happy, 7 top picks.
+    // With 8 voters a second table needs 2 more happy players, so one table stays.
+    const result = plan({
+      attendees: people(8),
+      games: [game(1, 2, 8), game(2, 2, 8)],
+      approvals: votes({ 1: people(7), 2: ["p5", "p6", "p7", "p8"] }),
+      topPicks: picks({ p1: 1, p2: 1, p3: 1, p4: 1, p5: 2, p6: 2, p7: 2 }),
+    });
+
+    expect(result.oneTable[0]).toMatchObject({ topPicks: 4, happy: 7 });
+    expect(result.twoTables[0]).toMatchObject({ topPicks: 7, happy: 8 });
+    expect(result.recommended).toBe("one");
+  });
+
+  it("Enough extra happy players", () => {
+    const result = plan({
+      attendees: people(8),
+      games: [game(1, 2, 8), game(2, 2, 8)],
+      approvals: votes({ 1: people(6), 2: ["p7", "p8"] }),
+    });
+
+    expect(result.twoTables[0].happy - result.oneTable[0].happy).toBe(2);
+    expect(result.recommended).toBe("two");
+  });
+});
+
+describe("three tables with top picks", () => {
+  it("tries a top-picked game even when ten games have more votes", () => {
+    // Three tables try only ten games. Game 11 has the fewest votes, but it is p1's top pick,
+    // and an option that seats p1 at it beats every option that doesn't.
+    const many = Array.from({ length: 10 }, (_, i) => i + 1);
+    const result = plan({
+      attendees: people(6),
+      games: [...many.map((id) => game(id, 2, 4)), game(11, 2, 4)],
+      approvals: votes({ ...Object.fromEntries(many.map((id) => [id, people(6)])), 11: ["p1"] }),
+      topPicks: picks({ p1: 11 }),
+    });
+
+    expect(gamesAt(result.threeTables[0])).toContain(11);
+    expect(result.threeTables[0].topPicks).toBe(1);
+  });
+});

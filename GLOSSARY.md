@@ -77,6 +77,9 @@ Whether the member who suggested a game brings their own copy. A game that nobod
 **Vote**:
 A member's approval or rejection of a suggestion on one night.
 
+**Top pick**:
+The one suggestion a member most wants to play on a night. It is also a vote, and each member has at most one per night.
+
 **Plan**:
 The planner's proposal for how to seat a night's players at tables, with options for one, two and three tables.
 

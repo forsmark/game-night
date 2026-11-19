@@ -43,6 +43,13 @@
       "when": 1793359279345,
       "tag": "0005_mixed_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795090084588,
+      "tag": "0006_strong_weapon_omega",
+      "breakpoints": true
     }
   ]
 }

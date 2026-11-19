@@ -9,8 +9,9 @@ export type PlanGame = {
   time: number | null;
 };
 
-export type PlanTable = { bggId: number; players: string[]; happy: number };
-export type PlanOption = { tables: PlanTable[]; happy: number; score: number };
+// `topPicks` counts players seated at their top pick, `happy` players seated at a game they voted for.
+export type PlanTable = { bggId: number; players: string[]; happy: number; topPicks: number };
+export type PlanOption = { tables: PlanTable[]; happy: number; topPicks: number; score: number };
 export type Layout = "one" | "two" | "three";
 export type Plan = {
   recommended: Layout | "none";
@@ -25,6 +26,8 @@ export type PlanInput = {
   games: PlanGame[];
   // bggId -> member ids who approved that game.
   approvals: Map<number, Set<string>>;
+  // Member id -> the one game they most want to play. A top pick is also an approval.
+  topPicks?: Map<string, number>;
 };
 
 const LAYOUTS: Layout[] = ["one", "two", "three"];
@@ -41,8 +44,11 @@ const TIME_SPREAD_WEIGHT = 0.4;
 const IMBALANCE_WEIGHT = 0.2;
 // A play time this many times longer than another counts as the largest gap.
 const TIME_RATIO_CAP = 4;
-// When seating, a seat at a game you didn't vote for costs more than any taste mismatch.
+// When seating, a seat at a game you didn't vote for costs more than any taste mismatch, and a
+// seat away from your top pick costs more than any number of seats at games people didn't vote
+// for (a night has at most 50 players). So seating fills top picks first, then votes, then taste.
 const UNHAPPY_COST = 1000;
+const MISSED_TOP_PICK_COST = 1_000_000;
 const EPSILON = 1e-9;
 
 type Taste = { weight: number | null; logTime: number | null };
@@ -85,13 +91,20 @@ function mismatch(taste: Taste | undefined, game: PlanGame) {
 
 type Context = { input: PlanInput; tastes: Map<string, Taste> };
 
+function topPickOf(input: PlanInput, id: string) {
+  return input.topPicks?.get(id);
+}
+
 function cost(ctx: Context, id: string, game: PlanGame) {
+  const pick = topPickOf(ctx.input, id);
+  const missed = pick !== undefined && pick !== game.bggId ? MISSED_TOP_PICK_COST : 0;
   const unhappy = approvers(ctx.input, game.bggId).has(id) ? 0 : UNHAPPY_COST;
-  return unhappy + mismatch(ctx.tastes.get(id), game);
+  return missed + unhappy + mismatch(ctx.tastes.get(id), game);
 }
 
 // Seats everyone at tables of the given sizes at the lowest total cost: first as many people
-// as possible at a game they voted for, then everyone as close to their taste as possible.
+// as possible at their top pick, then at a game they voted for, then everyone as close to their
+// taste as possible.
 // Starts from a greedy seating in attendee order, then moves people along cycles of tables
 // while that lowers the cost. With fixed table sizes, a seating no 2- or 3-table cycle can
 // improve is the best one, so this is exact for up to three tables.
@@ -151,9 +164,15 @@ function build(ctx: Context, games: PlanGame[], sizes: number[]): PlanOption {
   const n = ctx.input.attendees.length;
   const tables = games.map((g, i) => {
     const voters = approvers(ctx.input, g.bggId);
-    return { bggId: g.bggId, players: seated[i], happy: seated[i].filter((id) => voters.has(id)).length };
+    return {
+      bggId: g.bggId,
+      players: seated[i],
+      happy: seated[i].filter((id) => voters.has(id)).length,
+      topPicks: seated[i].filter((id) => topPickOf(ctx.input, id) === g.bggId).length,
+    };
   });
   const happy = tables.reduce((sum, t) => sum + t.happy, 0);
+  const topPicks = tables.reduce((sum, t) => sum + t.topPicks, 0);
 
   const bestWith = games.filter((g, i) => g.bestWith.includes(sizes[i])).length * BEST_WITH_BONUS;
   const taste =
@@ -164,11 +183,13 @@ function build(ctx: Context, games: PlanGame[], sizes: number[]): PlanOption {
   const imbalance = (Math.max(...sizes) - Math.min(...sizes)) / n;
   const quality = bestWith - TASTE_WEIGHT * taste - TIME_SPREAD_WEIGHT * spread - IMBALANCE_WEIGHT * imbalance;
 
-  return { tables, happy, score: happy + quality };
+  return { tables, happy, topPicks, score: happy + quality };
 }
 
-// Happy players first. The rest of the score only decides between equally happy options.
+// Top picks first, then happy players. The rest of the score only decides between options
+// that tie on both.
 function better(a: PlanOption, b: PlanOption) {
+  if (a.topPicks !== b.topPicks) return a.topPicks > b.topPicks;
   return a.happy !== b.happy ? a.happy > b.happy : a.score > b.score + EPSILON;
 }
 
@@ -218,7 +239,11 @@ function splitMargin(voters: number) {
 export function plan(input: PlanInput): Plan {
   const ctx: Context = { input, tastes: tastes(input) };
   const wanted = (g: PlanGame) => input.attendees.filter((id) => approvers(input, g.bggId).has(id)).length;
-  const mostWanted = [...input.games].sort((a, b) => wanted(b) - wanted(a)).slice(0, MAX_GAMES_FOR_THREE);
+  const picked = (g: PlanGame) => input.attendees.filter((id) => topPickOf(input, id) === g.bggId).length;
+  // Top picks rank options first, so a game someone top-picked is tried before any game nobody did.
+  const mostWanted = [...input.games]
+    .sort((a, b) => picked(b) - picked(a) || wanted(b) - wanted(a))
+    .slice(0, MAX_GAMES_FOR_THREE);
 
   const byLayout: Record<Layout, PlanOption[]> = {
     one: options(ctx, input.games, 1),

@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { sqliteTable, text, integer, real, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const members = sqliteTable("members", {
   id: text("id").primaryKey(),
@@ -127,8 +128,15 @@ export const votes = sqliteTable(
     memberId: text("member_id")
       .notNull()
       .references(() => members.id, { onDelete: "cascade" }),
+    // The one game this member most wants to play tonight. A top pick lives on its vote, so
+    // anything that removes the vote clears the top pick too.
+    topPick: integer("top_pick", { mode: "boolean" }).notNull().default(false),
   },
-  (t) => [primaryKey({ columns: [t.eventId, t.bggId, t.memberId] })],
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.bggId, t.memberId] }),
+    // At most one top pick per member per night.
+    uniqueIndex("votes_one_top_pick").on(t.eventId, t.memberId).where(sql`${t.topPick} = 1`),
+  ],
 );
 
 // App-wide settings as key/value pairs.
