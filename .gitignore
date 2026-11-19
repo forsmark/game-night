@@ -5,8 +5,7 @@ data/
 *.db
 *.db-shm
 *.db-wal
-.claude/*
-!.claude/skills/
+.claude/
 .DS_Store
 collection.csv
 dist-server/

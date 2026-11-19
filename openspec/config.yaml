@@ -1,5 +1,4 @@
 schema: spec-driven
-skillsScope: project
 
 context: |
   Game Night is a web app for a monthly board game night. Friends join through a group link, answer if they are coming, suggest games, and vote. A planner proposes one, two or three tables.
