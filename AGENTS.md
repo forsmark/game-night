@@ -58,7 +58,7 @@ The first OpenSpec change wires the pnpm commands above into CONFIG in `scripts/
 
 ### Rules
 
-- **Dependencies:** `dependencies` holds only what the server imports at runtime (hono, @hono/node-server, better-sqlite3, drizzle-orm, zod, fast-xml-parser). Frontend packages are bundled by Vite and belong in `devDependencies`, or they end up in the container image.
+- **Dependencies:** `dependencies` holds only what the server imports at runtime (hono, @hono/node-server, better-sqlite3, drizzle-orm, zod, fast-xml-parser). Frontend packages are bundled by Vite and belong in `devDependencies`, or they end up in the container image. `@typescript/typescript6` is the TypeScript 6 compiler API, which TypeScript 7 lacks. The spec checks' coverage check parses test files with it, so keep it.
 - **Package manager:** use pnpm, never npm. `.npmrc` and `pnpm-workspace.yaml` require packages to be at least 7 days old. Don't lower that limit to install something newer.
 - **Migrations:** never edit a migration that exists. Change `schema.ts`, then run `pnpm db:generate`. The server applies migrations when it starts.
 - **Tests:** a test must say why the behaviour matters, and fail when that behaviour breaks. Keep logic pure where you can (planner, physics, parsers) and test it directly.
